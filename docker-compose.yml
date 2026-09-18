@@ -1,3 +1,22 @@
+x-app-env: &app-env
+  DB_HOST: mysql
+  DB_PORT: "3306"
+  DB_USERNAME: ${DB_USERNAME}
+  DB_PASSWORD: ${DB_PASSWORD}
+  REDIS_URL: redis://redis:6379
+  RABBITMQ_HOST: rabbitmq
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+  JWT_SECRET: ${JWT_SECRET}
+  JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+  JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-604800000}
+  IDENTITY_SERVICE_URL: http://identity-service:8081
+  CATALOG_SERVICE_URL: http://catalog-service:8082
+  EVENT_SERVICE_URL: http://event-service:8083
+  CUSTOMER_SERVICE_URL: http://customer-service:8084
+  NOTIFICATION_SERVICE_URL: http://notification-service:8085
+
 services:
   mysql:
     image: mysql:8.0
@@ -50,6 +69,86 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # --- application services: only api-gateway publishes a host port ---
+  # Build the jars first (mvn -q -DskipTests package at the repo root), then
+  # `docker compose up -d --build`.
+
+  identity-service:
+    build: ./services/identity-service
+    container_name: event-platform-identity-service
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      SUPERADMIN_USERNAME: ${SUPERADMIN_USERNAME}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  catalog-service:
+    build: ./services/catalog-service
+    container_name: event-platform-catalog-service
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  event-service:
+    build: ./services/event-service
+    container_name: event-platform-event-service
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  customer-service:
+    build: ./services/customer-service
+    container_name: event-platform-customer-service
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  notification-service:
+    build: ./services/notification-service
+    container_name: event-platform-notification-service
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      FCM_CREDENTIALS_JSON: ${FCM_CREDENTIALS_JSON}
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: event-platform-api-gateway
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - identity-service
+      - catalog-service
+      - event-service
+      - customer-service
+      - notification-service
 
 volumes:
   mysql_data:

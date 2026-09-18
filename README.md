@@ -283,6 +283,69 @@ tới đúng địa chỉ email của admin thay vì bay lỗi ra ngoài làm ch
   service-to-service qua mạng nội bộ, chưa có xác thực service-to-service — sẽ cần siết lại khi có gateway
   ở Phase 6) để notification-service tra cứu userId + email của admin.
 
+## Phase 6 — api-gateway (điểm vào duy nhất)
+
+### Chạy rời từng service (dev, không qua Docker)
+
+```bash
+set -a; source .env; set +a
+for s in identity-service catalog-service event-service customer-service notification-service api-gateway; do
+  mvn -pl services/$s spring-boot:run &
+done
+```
+
+Sau đó gọi mọi API qua `http://localhost:8080` thay vì port riêng của từng service — gateway tự route
+theo path và tự kiểm tra JWT (401 ngay tại gateway nếu thiếu/sai token, trước khi chạm tới service phía
+sau):
+
+```bash
+curl -X POST http://localhost:8080/api/tenants/register -H "Content-Type: application/json" -d '{...}'
+TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login ... | ...)
+curl http://localhost:8080/api/customers -H "Authorization: Bearer $TOKEN"          # -> customer-service
+curl http://localhost:8080/api/tenant/vendor-profile -H "Authorization: Bearer $TOKEN"  # -> catalog-service
+curl http://localhost:8080/api/tenant/events -H "Authorization: Bearer $TOKEN"      # -> event-service
+```
+
+### Chạy toàn bộ hệ thống qua Docker Compose (DoD Phase 6)
+
+```bash
+mvn -q -DskipTests package        # build jar cho cả 6 service trước
+docker compose build              # build image cho 6 service (infra dùng image có sẵn)
+docker compose up -d              # lên toàn bộ: 3 infra + 6 app service
+docker compose ps                 # tất cả phải Up/healthy
+```
+
+Chỉ `api-gateway` publish port ra host (`8080:8080`) — 5 service còn lại **không** có `ports:` trong
+compose, chỉ gọi được với nhau qua tên service trong mạng Docker nội bộ (`http://identity-service:8081`,
+v.v., cấu hình qua biến `x-app-env` dùng chung trong `docker-compose.yml`). Đã verify: `curl localhost:8081`
+(và 8082-8085) không kết nối được từ host, chỉ `localhost:8080` phản hồi — đúng nghĩa "gọi API qua 1 cổng
+duy nhất". Toàn bộ flow register → login → tạo khách hàng → tạo show → gán thành viên đã chạy end-to-end
+qua gateway trên hệ thống Docker thật, kể cả message RabbitMQ tới notification-service.
+
+Dockerfile của mỗi service chỉ COPY jar đã build sẵn (không build Maven bên trong Docker) — đơn giản hoá
+có chủ đích cho vòng lặp dev nhanh; multi-stage build tái lập được từ source (không cần host có Maven) để
+dành cho phase "Integration + Deploy FPT Cloud" khi cần pipeline CI/CD thật.
+
+### Kiến trúc: vì sao không dùng Spring Cloud Gateway
+
+Ban đầu dùng `spring-cloud-starter-gateway` (Spring Cloud 2025.0.0, bản duy nhất tương thích Spring Boot
+4) đúng như plan gợi ý ("Spring Cloud Gateway hoặc Nginx"), nhưng gặp hàng loạt lỗi khởi động do các class
+autoconfiguration của spring-cloud-commons/gateway-server còn tham chiếu path autoconfigure cũ của Spring
+Boot 3.x (`org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration`,
+`...orm.jpa.HibernateJpaAutoConfiguration`, `...web.embedded.NettyWebServerFactoryCustomizer`...) — Boot 4
+đã tách các package này ra module riêng (`spring-boot-jdbc`, `spring-boot-hibernate`...). Sau khi loại trừ
+được vài lớp không quan trọng (`LifecycleMvcEndpointAutoConfiguration`, `RefreshAutoConfiguration`,
+`SimpleDiscoveryClientAutoConfiguration`...) thì gặp phải `GatewayAutoConfiguration$NettyConfiguration` —
+chính lớp dựng Netty server lõi của gateway — nghĩa là bản Spring Cloud Gateway 4.3.0 này chưa thực sự
+tương thích Boot 4 ở phần cốt lõi, không chỉ tính năng phụ.
+
+Quyết định: bỏ Spring Cloud Gateway, tự viết reverse-proxy bằng WebFlux thuần (`GatewayProxyFilter`, một
+`WebFilter` duy nhất) — route theo bảng path tĩnh (`RouteTable`) + forward bằng `WebClient`, tái dùng thẳng
+`JwtTokenProvider` từ `shared-common` để check JWT. Nhẹ hơn, không phụ thuộc thêm hệ sinh thái Spring Cloud
+(vốn cũng không cần thiết cho quy mô 6 service cố định, không cần service discovery/load balancing động),
+và tránh được toàn bộ lớp tương thích nói trên. Đây vẫn nằm trong phạm vi plan cho phép ("Spring Cloud
+Gateway **hoặc** Nginx") — chỉ là lựa chọn thứ 3 tự triển khai thay vì dùng nguyên khối có sẵn.
+
 ## Ghi chú bảo mật
 
 - Không commit `.env`. `.env.example` chỉ chứa placeholder.
