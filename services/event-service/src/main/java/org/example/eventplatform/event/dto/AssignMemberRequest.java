@@ -1,0 +1,17 @@
+package org.example.eventplatform.event.dto;
+
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+public class AssignMemberRequest {
+    @NotNull
+    private Long userId;
+    private String position;
+}
