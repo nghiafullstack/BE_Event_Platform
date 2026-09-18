@@ -16,6 +16,40 @@ Cấu trúc theo convention của rencity-platform-spring: service ở `services
 | services/notification-service | 8085 | — (RabbitMQ consumer) |
 | libs/shared-common | — | JWT filter, exception handler, BaseEntity, TenantContext |
 
+## Quy ước API chung (áp dụng mọi service, kể cả qua gateway)
+
+**1. Mọi request/response body đều `snake_case`** — cấu hình 1 dòng
+`spring.jackson.property-naming-strategy=SNAKE_CASE` ở từng service (Jackson tự áp dụng cho cả chiều
+đọc lẫn ghi, field Java vẫn viết camelCase bình thường, không phải đổi tên field trong code). Ví dụ field
+Java `fullName`, `accessToken`, `tenantId` sẽ là `full_name`, `access_token`, `tenant_id` trên JSON.
+
+**2. Mọi response đều bọc trong 1 envelope chung** — `ResponseWrappingAdvice` (`shared-common`) tự động
+bọc mọi response của mọi controller, không cần sửa từng controller:
+
+```json
+// thanh cong
+{ "success": true, "code": "OK", "message": null, "data": { ... hoac list/page ... } }
+
+// loi
+{ "success": false, "code": "CUSTOMER_PHONE_DUPLICATE", "message": "Số điện thoại này đã tồn tại...", "data": null }
+```
+
+204 No Content (DELETE) vẫn giữ nguyên không có body, không bị bọc.
+
+**3. Mã lỗi (`code`) ổn định, tách khỏi message tiếng Việt** — dùng khi client cần phân biệt case cụ
+thể mà không parse chuỗi. `ApiException(HttpStatus, code, message)` ở `shared-common`, mỗi service tự định
+nghĩa mã lỗi riêng của mình (không dùng 1 enum chung cho cả hệ thống, tránh phải sửa file chung mỗi khi
+thêm lỗi mới), quy ước `DOMAIN_LY_DO` viết hoa, ví dụ `CUSTOMER_PHONE_DUPLICATE`, `EVENT_ASSIGNMENT_NOT_OWNED`.
+Cơ chế mới được thêm, **áp dụng dần** — code cũ (`RuntimeException`/`IllegalStateException`/
+`EntityNotFoundException` chung chung) vẫn chạy được, tự động nhận `code` mặc định (`BAD_REQUEST`,
+`CONFLICT`, `NOT_FOUND`) qua `GlobalExceptionHandler`, chỉ nơi nào cần code cụ thể mới đổi sang `throw new
+ApiException(...)`.
+
+> Lưu ý: các ví dụ `curl` ở từng Phase bên dưới được viết **trước** khi có 2 quy ước trên — field trong
+> JSON mẫu vẫn ghi camelCase (`adminUsername`, `customerId`...) và response mẫu không có field `success/
+> code/data` bọc ngoài. Endpoint/logic vẫn đúng y nguyên, chỉ khác đúng 2 chỗ: gửi field bằng snake_case,
+> và đọc kết quả thật từ `response.data` thay vì đọc thẳng.
+
 ## Chạy hạ tầng (Phase 0)
 
 ```bash

@@ -64,13 +64,13 @@ public class GatewayProxyFilter implements WebFilter, Ordered {
 
         RouteTable.Route route = routeTable.resolve(path);
         if (route == null) {
-            return respond(exchange, HttpStatus.NOT_FOUND, "Không có route cho " + path);
+            return respond(exchange, HttpStatus.NOT_FOUND, "NOT_FOUND", "Không có route cho " + path);
         }
 
         if (!isPublic(request)) {
             String token = extractToken(request);
             if (token == null || !jwtTokenProvider.validateToken(token) || jwtTokenProvider.isRefreshToken(token)) {
-                return respond(exchange, HttpStatus.UNAUTHORIZED, "Thiếu hoặc sai access token");
+                return respond(exchange, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Thiếu hoặc sai access token");
             }
         }
 
@@ -99,7 +99,7 @@ public class GatewayProxyFilter implements WebFilter, Ordered {
                 })
                 .onErrorResume(ex -> {
                     log.error("Proxy error forwarding {} to {}", request.getPath(), targetUrl, ex);
-                    return respond(exchange, HttpStatus.BAD_GATEWAY, "Không gọi được service phía sau");
+                    return respond(exchange, HttpStatus.BAD_GATEWAY, "BAD_GATEWAY", "Không gọi được service phía sau");
                 });
     }
 
@@ -118,11 +118,13 @@ public class GatewayProxyFilter implements WebFilter, Ordered {
         return cookie != null ? cookie.getValue() : null;
     }
 
-    private Mono<Void> respond(ServerWebExchange exchange, HttpStatus status, String message) {
+    // Matches shared-common's ApiResponse shape by hand — this filter runs before any
+    // controller/Jackson machinery, so there is no ApiResponse bean to reuse here.
+    private Mono<Void> respond(ServerWebExchange exchange, HttpStatus status, String code, String message) {
         exchange.getResponse().setStatusCode(status);
         exchange.getResponse().getHeaders().add(HttpHeaders.CONTENT_TYPE, "application/json");
-        String body = "{\"status\":%d,\"error\":\"%s\",\"message\":\"%s\"}"
-                .formatted(status.value(), status.getReasonPhrase(), message);
+        String body = "{\"success\":false,\"code\":\"%s\",\"message\":\"%s\",\"data\":null}"
+                .formatted(code, message);
         DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
         return exchange.getResponse().writeWith(Mono.just(buffer));
     }
