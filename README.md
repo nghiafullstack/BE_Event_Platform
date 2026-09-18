@@ -194,6 +194,44 @@ override qua command-line, vẫn không thấy field `message`) — mọi lỗi 
 Đồng thời phát hiện thêm: thiếu `permitAll` cho path `/error` khiến Spring Security tự chặn luôn request
 forward nội bộ khi có exception (403 rỗng che mất lỗi thật) — đã thêm vào cả 3 `SecurityConfig`.
 
+## Phase 4 — catalog-service
+
+```bash
+set -a; source .env; set +a
+mvn -pl services/identity-service spring-boot:run &
+mvn -pl services/catalog-service spring-boot:run &
+```
+
+```bash
+SUPER_TOKEN=$(curl -s -X POST http://localhost:8081/api/auth/login -H "Content-Type: application/json" \
+  -d "{\"username\":\"superadmin\",\"password\":\"$SUPERADMIN_PASSWORD\"}" | python3 -c "import sys,json;print(json.load(sys.stdin)['accessToken'])")
+
+# 1. SUPER_ADMIN tạo tối thiểu 2 loại vendor (public GET, chỉ SUPER_ADMIN mới tạo/sửa/xoá được)
+curl -X POST http://localhost:8082/api/service-categories -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SUPER_TOKEN" -d '{"name":"Lan Su Rong","code":"lan-su-rong"}'
+curl -X POST http://localhost:8082/api/service-categories -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SUPER_TOKEN" -d '{"name":"Ban Nhac","code":"ban-nhac"}'
+curl http://localhost:8082/api/service-categories   # public, không cần token
+
+# 2. Mỗi tenant tự tạo/sửa hồ sơ vendor của mình (upsert), tham chiếu 1 serviceCategoryId
+TOKEN=$(curl -s -X POST http://localhost:8081/api/auth/login -H "Content-Type: application/json" \
+  -d '{"username":"admin_abc","password":"Admin@123"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['accessToken'])")
+curl -X PUT http://localhost:8082/api/tenant/vendor-profile -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{
+  "serviceCategoryId": 1, "businessName": "Doan Lan ABC", "address": "Q5, TPHCM"
+}'
+
+# 3. Hồ sơ vendor công khai — ai cũng xem được, lọc theo loại
+curl "http://localhost:8082/api/vendor-profiles"
+curl "http://localhost:8082/api/vendor-profiles?serviceCategoryId=1"
+curl "http://localhost:8082/api/vendor-profiles/<id>"
+```
+
+Thiết kế "Tenant tham chiếu tới ServiceCategory" theo đúng ranh giới database-per-service: **không** thêm
+cột `serviceCategoryId` vào `Tenant` ở identity-service (sẽ tạo phụ thuộc ngược service). Thay vào đó
+`VendorProfile` (ở catalog-service) giữ cả `tenantId` lẫn `serviceCategoryId` — đây chính là chỗ tenant
+"tham chiếu" tới category, 1 tenant = 1 vendor profile = 1 category cho MVP. Đã verify DoD: tạo 2 tenant,
+mỗi tenant chọn 1 category khác nhau (Lân Sư Rồng / Ban Nhạc), list public lọc đúng theo từng loại.
+
 ## Ghi chú bảo mật
 
 - Không commit `.env`. `.env.example` chỉ chứa placeholder.
