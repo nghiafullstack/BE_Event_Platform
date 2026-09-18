@@ -232,6 +232,57 @@ cột `serviceCategoryId` vào `Tenant` ở identity-service (sẽ tạo phụ t
 "tham chiếu" tới category, 1 tenant = 1 vendor profile = 1 category cho MVP. Đã verify DoD: tạo 2 tenant,
 mỗi tenant chọn 1 category khác nhau (Lân Sư Rồng / Ban Nhạc), list public lọc đúng theo từng loại.
 
+## Phase 5 — notification-service
+
+```bash
+set -a; source .env; set +a
+mvn -pl services/identity-service spring-boot:run &
+mvn -pl services/event-service spring-boot:run &
+mvn -pl services/notification-service spring-boot:run &
+```
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8081/api/auth/login -H "Content-Type: application/json" \
+  -d '{"username":"admin_abc","password":"Admin@123"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['accessToken'])")
+
+# 1. Đăng ký FCM token cho chính mình (userId lấy từ JWT, không tin body như bản cũ)
+curl -X POST http://localhost:8085/api/fcm/register -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" -d '{"token":"device-token-xyz"}'
+
+# 2. Tạo show + gán chính mình làm thành viên -> publish MEMBER_ASSIGNED -> xem log notification-service
+curl -X POST http://localhost:8083/api/events -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{...}'
+curl -X POST http://localhost:8083/api/tenant/events/<EVENT_ID>/assign -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" -d '[{"userId":<USER_ID>,"position":"DAU_LAN"}]'
+# -> log: "[DEV] would send FCM push to token=device-token-xyz title=..."
+
+# 3. Từ chối show -> publish MEMBER_REJECTED (broadcast tới admin của tenant) -> vừa push vừa email
+curl -X PATCH "http://localhost:8083/api/tenant/events/assignments/<USER_EVENT_ID>/respond?status=REJECTED&note=..." \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Vì sao push chỉ log "[DEV] would send" chứ không bắn thật**: `FCM_CREDENTIALS_JSON`/`SMTP_PASSWORD` trong
+`.env` vẫn là placeholder (chưa có project Firebase thật, và mật khẩu Gmail thật vẫn chờ ông tự rotate —
+xem ghi chú bảo mật). `FirebaseConfig` phát hiện placeholder và tự chuyển `FcmPushService` sang chế độ log
+thay vì gọi Firebase thật, nên pipeline vẫn test được đầy đủ (đúng recipient, đúng nội dung) mà không cần hạ
+tầng thật; khi có Firebase project + có app Flutter (Phase 7) sinh token thật, chỉ cần điền
+`FCM_CREDENTIALS_JSON` là chuyển sang gửi push thật ngay, không phải sửa code. Email cũng vậy: gọi SMTP
+thật, bắt lỗi gọn (không crash consumer) — verify bằng cách thấy đúng log `AuthenticationFailedException`
+tới đúng địa chỉ email của admin thay vì bay lỗi ra ngoài làm chết listener.
+
+**Kiến trúc đáng chú ý:**
+- notification-service không có DB riêng như plan đã chốt — FCM token lưu ở Redis (dùng chung instance với
+  identity-service), key `fcm:user:{userId}`, hợp vì token thiết bị đổi liên tục, không cần bền như dữ liệu
+  nghiệp vụ.
+- `shared-common` kéo theo `spring-boot-starter-data-jpa` (cho `BaseEntity`), nên notification-service phải
+  loại trừ tường minh `DataSourceAutoConfiguration`/`HibernateJpaAutoConfiguration` (ở
+  `NotificationServiceApplication`) vì không có `spring.datasource.*` nào được cấu hình — nếu không sẽ
+  crash lúc khởi động.
+- Message kiểu broadcast (`recipientUserId=null`, chỉ có `tenantId`) cần biết ai là admin của tenant đó —
+  thứ mà notification-service không có quyền truy vấn trực tiếp (User thuộc identity-service). Đã thêm
+  endpoint nội bộ `GET /api/internal/tenants/{tenantId}/admins` ở identity-service (permitAll, chỉ dùng
+  service-to-service qua mạng nội bộ, chưa có xác thực service-to-service — sẽ cần siết lại khi có gateway
+  ở Phase 6) để notification-service tra cứu userId + email của admin.
+
 ## Ghi chú bảo mật
 
 - Không commit `.env`. `.env.example` chỉ chứa placeholder.

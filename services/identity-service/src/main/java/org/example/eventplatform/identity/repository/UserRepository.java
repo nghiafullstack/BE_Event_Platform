@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -28,4 +29,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByTenantIdAndEmail(Long tenantId, String email);
 
     boolean existsByEmailAndTenantId(String email, Long tenantId);
+
+    @Query("SELECT u FROM User u WHERE u.tenant.id = :tenantId AND u.roles.name = :roleName")
+    List<User> findByTenantIdAndRoleName(@Param("tenantId") Long tenantId, @Param("roleName") String roleName);
 }
