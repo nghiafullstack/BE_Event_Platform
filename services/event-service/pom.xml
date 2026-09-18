@@ -7,18 +7,39 @@
         <groupId>org.example.eventplatform</groupId>
         <artifactId>event-platform-parent</artifactId>
         <version>0.0.1-SNAPSHOT</version>
-        <relativePath>../pom.xml</relativePath>
+        <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>api-gateway</artifactId>
+    <artifactId>event-service</artifactId>
     <packaging>jar</packaging>
-    <name>api-gateway</name>
-    <description>Single entry point — routing and centralized JWT check land here in Phase 6</description>
+    <name>event-service</name>
+    <description>Event/booking, member assignment, check-in/out, dashboard</description>
 
     <dependencies>
         <dependency>
+            <groupId>org.example.eventplatform</groupId>
+            <artifactId>shared-common</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
@@ -30,10 +51,15 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.amqp</groupId>
+            <artifactId>spring-rabbit-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
-        <finalName>api-gateway</finalName>
+        <finalName>event-service</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

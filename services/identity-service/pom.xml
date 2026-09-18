@@ -7,13 +7,13 @@
         <groupId>org.example.eventplatform</groupId>
         <artifactId>event-platform-parent</artifactId>
         <version>0.0.1-SNAPSHOT</version>
-        <relativePath>../pom.xml</relativePath>
+        <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>customer-service</artifactId>
+    <artifactId>identity-service</artifactId>
     <packaging>jar</packaging>
-    <name>customer-service</name>
-    <description>Customer CRM</description>
+    <name>identity-service</name>
+    <description>Auth, User, Tenant, Role, Permission</description>
 
     <dependencies>
         <dependency>
@@ -33,6 +33,10 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
@@ -47,10 +51,15 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
-        <finalName>customer-service</finalName>
+        <finalName>identity-service</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

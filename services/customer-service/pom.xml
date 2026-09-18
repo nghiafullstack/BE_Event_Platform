@@ -7,13 +7,13 @@
         <groupId>org.example.eventplatform</groupId>
         <artifactId>event-platform-parent</artifactId>
         <version>0.0.1-SNAPSHOT</version>
-        <relativePath>../pom.xml</relativePath>
+        <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>catalog-service</artifactId>
+    <artifactId>customer-service</artifactId>
     <packaging>jar</packaging>
-    <name>catalog-service</name>
-    <description>Vendor service categories and public vendor profiles</description>
+    <name>customer-service</name>
+    <description>Customer CRM</description>
 
     <dependencies>
         <dependency>
@@ -50,7 +50,7 @@
     </dependencies>
 
     <build>
-        <finalName>catalog-service</finalName>
+        <finalName>customer-service</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

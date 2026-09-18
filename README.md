@@ -4,15 +4,17 @@ Monorepo Maven multi-module. Kế hoạch đầy đủ nằm ở doc "Event Plat
 
 ## Modules
 
+Cấu trúc theo convention của rencity-platform-spring: service ở `services/`, thư viện dùng chung ở `libs/`.
+
 | Module | Port | DB |
 | --- | --- | --- |
-| api-gateway | 8080 | — |
-| identity-service | 8081 | identity_db |
-| catalog-service | 8082 | catalog_db |
-| event-service | 8083 | event_db |
-| customer-service | 8084 | customer_db |
-| notification-service | 8085 | — (RabbitMQ consumer) |
-| shared-common | — | thư viện dùng chung: JWT filter, exception handler, BaseEntity, TenantContext |
+| services/api-gateway | 8080 | — |
+| services/identity-service | 8081 | identity_db |
+| services/catalog-service | 8082 | catalog_db |
+| services/event-service | 8083 | event_db |
+| services/customer-service | 8084 | customer_db |
+| services/notification-service | 8085 | — (RabbitMQ consumer) |
+| libs/shared-common | — | JWT filter, exception handler, BaseEntity, TenantContext |
 
 ## Chạy hạ tầng (Phase 0)
 
@@ -43,15 +45,10 @@ trường trong shell trước khi chạy:
 
 ```bash
 set -a; source .env; set +a
-mvn -pl identity-service spring-boot:run
+mvn -pl services/identity-service spring-boot:run
 ```
 
 ## Phase 1 — identity-service
-
-```bash
-set -a; source .env; set +a
-mvn -pl identity-service spring-boot:run
-```
 
 Lần chạy đầu tiên trên DB rỗng, `DataSeeder` tự tạo 3 role (`SUPER_ADMIN`, `ADMIN`, `TN_MEMBER`) và
 1 tài khoản `SUPER_ADMIN` theo `SUPERADMIN_USERNAME`/`SUPERADMIN_PASSWORD` trong `.env`.
