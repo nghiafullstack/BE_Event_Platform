@@ -27,6 +27,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Sàn/khách tạo show request công khai; xem plan "sàn đẩy show"
                         .requestMatchers(HttpMethod.POST, "/api/events").permitAll()
+                        .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session

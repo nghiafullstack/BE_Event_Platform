@@ -149,6 +149,51 @@ Kiểm tra RabbitMQ nhận message (assign/respond/auto-complete đều publish)
   bất kỳ. Bản mới bắt buộc `userId` trong JWT phải khớp chủ của bản ghi phân công (trừ khi người gọi có
   role ADMIN/SUPER_ADMIN).
 
+## Phase 3 — customer-service
+
+```bash
+set -a; source .env; set +a
+mvn -pl services/identity-service spring-boot:run &
+mvn -pl services/customer-service spring-boot:run &
+mvn -pl services/event-service spring-boot:run &      # để test gán khách vào show
+```
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8081/api/auth/login -H "Content-Type: application/json" \
+  -d '{"username":"admin_abc","password":"Admin@123"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['accessToken'])")
+
+# CRUD khách hàng — mọi endpoint scope theo tenantId lấy từ JWT
+curl -X POST http://localhost:8084/api/customers -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"fullName":"Nguyen Van A","phone":"0901234567","type":"INDIVIDUAL"}'
+# -> lấy "id" làm CUSTOMER_ID
+
+curl "http://localhost:8084/api/customers?keyword=nguyen" -H "Authorization: Bearer $TOKEN"
+curl http://localhost:8084/api/customers/<CUSTOMER_ID> -H "Authorization: Bearer $TOKEN"
+curl -X PUT http://localhost:8084/api/customers/<CUSTOMER_ID> -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"fullName":"Nguyen Van A VIP","phone":"0901234567","type":"BUSINESS"}'
+curl -X DELETE http://localhost:8084/api/customers/<CUSTOMER_ID> -H "Authorization: Bearer $TOKEN"
+
+# Gán khách hàng vào show khi tạo event (event-service)
+curl -X POST http://localhost:8083/api/events -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -d '{
+  "name": "Khai truong", "type": "GRAND_OPENING", "eventDate": "2026-10-01",
+  "location": "999 Hung Vuong", "customerId": <CUSTOMER_ID>, "totalAmount": 3000000
+}'
+```
+
+Đơn giản hoá: `phone` chỉ unique theo `(tenant_id, phone)` — bản cũ khai `unique=true` toàn cục trên
+cột `phone` trong khi service lại chỉ check trùng theo tenant, tự mâu thuẫn. `assignedTo`/`tenant` là
+`Long` thuần thay vì JPA relation sang identity-service. event-service chỉ lưu `customerId` khi tạo
+show, chưa gọi REST sang customer-service để validate/enrich tên — để dành cho sau, không chặn DoD.
+
+**Fix quan trọng áp dụng cho mọi service (identity/event/customer) trong lúc làm Phase 3**: phát hiện
+`server.error.include-message=always` không có tác dụng trên bản Spring Boot đang dùng (đã thử cả
+override qua command-line, vẫn không thấy field `message`) — mọi lỗi nghiệp vụ (RuntimeException) trả về
+403 rỗng hoặc 500 không rõ nguyên nhân, không tự test được. Đã thêm hẳn `@ExceptionHandler` cho
+`EntityNotFoundException` (404), `IllegalStateException` (409), `RuntimeException` (400) vào
+`GlobalExceptionHandler` ở `shared-common` — giờ mọi lỗi đều trả JSON `{status, error, message}` rõ ràng.
+Đồng thời phát hiện thêm: thiếu `permitAll` cho path `/error` khiến Spring Security tự chặn luôn request
+forward nội bộ khi có exception (403 rỗng che mất lỗi thật) — đã thêm vào cả 3 `SecurityConfig`.
+
 ## Ghi chú bảo mật
 
 - Không commit `.env`. `.env.example` chỉ chứa placeholder.
