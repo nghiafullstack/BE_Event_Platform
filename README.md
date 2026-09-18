@@ -13,7 +13,7 @@ Cấu trúc theo convention của rencity-platform-spring: service ở `services
 | services/catalog-service | 8082 | catalog_db |
 | services/event-service | 8083 | event_db |
 | services/customer-service | 8084 | customer_db |
-| services/notification-service | 8085 | — (RabbitMQ consumer) |
+| services/notification-service | 8085 | notification_db (inbox + fcm_tokens) |
 | libs/shared-common | — | JWT filter, exception handler, BaseEntity, TenantContext |
 
 ## Quy ước API chung (áp dụng mọi service, kể cả qua gateway)
@@ -167,9 +167,9 @@ Kiểm tra RabbitMQ nhận message (assign/respond/auto-complete đều publish)
 
 Đơn giản hoá có chủ đích so với bản cũ:
 - `Event.customerId`/`tenantId` và `UserEvent.userId` là ID thuần (Long), không còn JPA `@ManyToOne` sang
-  Customer/Tenant/User — đúng ranh giới database-per-service. Response chỉ trả ID, chưa join tên hiển thị
-  (customerName, tenantName, fullName của member) vì customer-service (Phase 3) chưa có API thật và
-  identity-service chưa expose "get user by id" — việc enrich tên qua REST để dành làm sau, không chặn DoD.
+  Customer/Tenant/User — đúng ranh giới database-per-service. Response đã enrich tên hiển thị qua REST
+  nội bộ (`customer_name`, `tenant_name`, `user_full_name`, `vendor_business_name`,
+  `service_category_name`) — xem mục Internal API.
 - Không còn gọi FCM/email trực tiếp — mọi thông báo (gán thành viên, member phản hồi, show tự hoàn thành,
   đổi giờ tập trung) publish vào RabbitMQ queue `notification.queue` (contract `NotificationMessage` ở
   shared-common); notification-service (Phase 5) sẽ là consumer thật.
@@ -304,18 +304,18 @@ thật, bắt lỗi gọn (không crash consumer) — verify bằng cách thấy
 tới đúng địa chỉ email của admin thay vì bay lỗi ra ngoài làm chết listener.
 
 **Kiến trúc đáng chú ý:**
-- notification-service không có DB riêng như plan đã chốt — FCM token lưu ở Redis (dùng chung instance với
-  identity-service), key `fcm:user:{userId}`, hợp vì token thiết bị đổi liên tục, không cần bền như dữ liệu
-  nghiệp vụ.
-- `shared-common` kéo theo `spring-boot-starter-data-jpa` (cho `BaseEntity`), nên notification-service phải
-  loại trừ tường minh `DataSourceAutoConfiguration`/`HibernateJpaAutoConfiguration` (ở
-  `NotificationServiceApplication`) vì không có `spring.datasource.*` nào được cấu hình — nếu không sẽ
-  crash lúc khởi động.
+- notification-service có `notification_db`: bảng `notifications` (inbox cho chuông UI) và `fcm_tokens`
+  (device token). Consumer: persist inbox trước → rồi mới bắn FCM. Idempotent theo
+  `(message_id, user_id)`.
+- Dọn FCM token: (1) khi Firebase trả `UNREGISTERED`/`INVALID_ARGUMENT` → xóa token ngay;
+  (2) job 03:30 mỗi ngày xóa token không `last_seen_at` trong `FCM_TOKEN_RETENTION_DAYS` (mặc định 90).
+  App gọi `DELETE /api/fcm/register` khi logout để gỡ token chủ động.
+- Inbox API (qua gateway): `GET /api/notifications`, `GET /api/notifications/unread-count`,
+  `POST /api/notifications/{id}/read`, `POST /api/notifications/read-all`.
 - Message kiểu broadcast (`recipientUserId=null`, chỉ có `tenantId`) cần biết ai là admin của tenant đó —
-  thứ mà notification-service không có quyền truy vấn trực tiếp (User thuộc identity-service). Đã thêm
-  endpoint nội bộ `GET /api/internal/tenants/{tenantId}/admins` ở identity-service (permitAll, chỉ dùng
-  service-to-service qua mạng nội bộ, chưa có xác thực service-to-service — sẽ cần siết lại khi có gateway
-  ở Phase 6) để notification-service tra cứu userId + email của admin.
+  endpoint nội bộ `GET /api/internal/tenants/{tenantId}/admins` ở identity-service, bảo vệ bằng header
+  `X-Internal-Token` (= `INTERNAL_SERVICE_TOKEN`) — gateway **không** route `/api/internal/**`. Xem mục
+  "Internal API (service-to-service)" bên dưới.
 
 ## Phase 6 — api-gateway (điểm vào duy nhất)
 
@@ -380,9 +380,69 @@ Quyết định: bỏ Spring Cloud Gateway, tự viết reverse-proxy bằng Web
 và tránh được toàn bộ lớp tương thích nói trên. Đây vẫn nằm trong phạm vi plan cho phép ("Spring Cloud
 Gateway **hoặc** Nginx") — chỉ là lựa chọn thứ 3 tự triển khai thay vì dùng nguyên khối có sẵn.
 
+**Tóm lại: không dùng Spring Cloud (Gateway / Eureka / OpenFeign) vì** (1) Spring Cloud Gateway 4.3 chưa
+chạy ổn với Spring Boot 4.0.x trong workspace này; (2) topology cố định 6 service + Docker DNS theo tên
+service, không cần discovery/LB động; (3) call chéo dùng `RestClient` + `/api/internal/**` +
+`INTERNAL_SERVICE_TOKEN` là đủ.
+
+## Internal API (service-to-service)
+
+Các cạnh call chéo trong plan (`event → identity/catalog/customer`, `notification → identity`) đi qua
+REST nội bộ, **không** qua gateway:
+
+| Caller | Callee | Endpoint |
+| --- | --- | --- |
+| notification-service | identity-service | `GET /api/internal/tenants/{id}/admins` |
+| event-service | identity-service | `GET /api/internal/tenants/{id}`, `GET /api/internal/users/{id}`, `GET /api/internal/users?ids=` |
+| event-service | customer-service | `GET /api/internal/customers/{id}` |
+| event-service | catalog-service | `GET /api/internal/vendor-profiles/by-tenant/{tenantId}` |
+
+Quy ước chung:
+- Header bắt buộc: `X-Internal-Token: <INTERNAL_SERVICE_TOKEN>` (cùng giá trị trên mọi service).
+- `InternalServiceAuthFilter` (shared-common) chặn `/api/internal/**` nếu thiếu/sai token.
+- Response nội bộ **không** bọc `ApiResponse` (để `RestClient` bind thẳng DTO).
+- Gateway `RouteTable` cố ý **không** có pattern `/api/internal/**`.
+- Base URL cấu hình qua `IDENTITY_SERVICE_URL` / `CATALOG_SERVICE_URL` / `CUSTOMER_SERVICE_URL`
+  (Docker: `http://identity-service:8081`, …).
+
+Khi tạo show, event-service **validate** `customerId` tồn tại và thuộc đúng tenant; khi gán thành viên,
+validate user thuộc tenant. Khi đọc show/assignment, enrich tên hiển thị (best-effort: lỗi gọi S2S
+không làm sập response đọc, chỉ để trống tên).
+
+Tối ưu N+1: `EventService.getTenantEvents`/`getTenantSchedule` (list phân trang) chỉ gọi
+`identityServiceClient.findTenant` + `catalogServiceClient.findVendorByTenant` **1 lần cho cả trang**
+(qua `TenantVendorContext`, vì mọi show trong 1 trang cùng thuộc 1 tenant) thay vì gọi lại cho từng dòng.
+`customerServiceClient.findCustomer` vẫn gọi theo từng dòng (mỗi show có thể khác khách hàng) — chấp nhận
+được ở quy mô hiện tại, có thể thêm endpoint lookup hàng loạt ở customer-service sau nếu cần.
+
+### 2 bug đã tìm và sửa khi verify end-to-end phần internal API này
+
+1. **`InternalRestClients` deserialize sai do lệch naming strategy — enrich luôn ra `null` mà không log
+   lỗi nào.** `spring.jackson.property-naming-strategy=SNAKE_CASE` chỉ áp cho `ObjectMapper` do Boot tự
+   cấu hình cho tầng MVC (server request/response); `RestClient.builder().build()` gọi trực tiếp (không
+   qua Spring context) lại dùng converter Jackson mặc định (camelCase). Field 1 từ (`TenantSummary.name`)
+   tình cờ vẫn khớp nên `tenant_name` từng chạy đúng, nhưng field nhiều từ
+   (`CustomerSummary.fullName` ↔ JSON `full_name`, `VendorProfileSummary.businessName`/
+   `serviceCategoryName`) không khớp tên → Jackson mặc định của Spring **không throw exception** khi
+   thiếu/thừa property, chỉ âm thầm để `null` — nên log lỗi (`log.error("Could not fetch...")`) không hề
+   xuất hiện, dễ tưởng nhầm là lỗi ở phía gọi thay vì phía parse. Fix: `InternalRestClients.create()` tự
+   dựng 1 `JacksonJsonHttpMessageConverter` (Boot 4 dùng Jackson 3 — package `tools.jackson.databind.*`,
+   không phải `com.fasterxml.jackson.databind.*` của Jackson 2) với `PropertyNamingStrategies.SNAKE_CASE`
+   riêng, gắn vào `RestClient` thay vì dùng converter mặc định.
+2. **`ResponseWrappingAdvice` throw `ClassCastException` cho mọi endpoint khai báo
+   `ResponseEntity<String>`** (7 endpoint ở `TenantEventController`: accept/reject/assign/respond/
+   concentrate-check-in/check-in/check-out). Spring chọn `HttpMessageConverter` dựa trên **kiểu khai báo
+   ở controller** trước khi `beforeBodyWrite` chạy — với `ResponseEntity<String>`, `StringHttpMessageConverter`
+   được chọn sẵn; khi advice trả về object `ApiResponse` thay vì `String`, converter cố ép kiểu và
+   crash. Fix: trong `beforeBodyWrite`, nếu `selectedConverterType` là `StringHttpMessageConverter`,
+   tự `objectMapper.writeValueAsString(envelope)` rồi trả chuỗi JSON đó (đồng thời set lại
+   `Content-Type: application/json` vì mặc định của converter này là `text/plain`).
+
 ## Ghi chú bảo mật
 
 - Không commit `.env`. `.env.example` chỉ chứa placeholder.
+- `INTERNAL_SERVICE_TOKEN` phải là chuỗi dài ngẫu nhiên, giống nhau trên mọi service (và trong
+  `docker-compose` qua `x-app-env`).
 - Mật khẩu SMTP Gmail dùng ở `SMTP_USERNAME`/`SMTP_PASSWORD` phải là App Password **mới**, khác với
   cái đã lộ plaintext trong `BE_Event_Platform/src/main/resources/application.properties` (đã bị
   commit lên git) — cái cũ coi như đã lộ, phải revoke trong Google Account trước khi tạo cái thay thế.

@@ -1,6 +1,7 @@
 package org.example.eventplatform.notification.client;
 
 import lombok.extern.slf4j.Slf4j;
+import org.example.eventplatform.shared.client.InternalRestClients;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -13,8 +14,9 @@ public class IdentityServiceClient {
 
     private final RestClient restClient;
 
-    public IdentityServiceClient(@Value("${identity-service.base-url}") String baseUrl) {
-        this.restClient = RestClient.create(baseUrl);
+    public IdentityServiceClient(@Value("${identity-service.base-url}") String baseUrl,
+                                  @Value("${internal.service-token:}") String internalToken) {
+        this.restClient = InternalRestClients.create(baseUrl, internalToken);
     }
 
     public List<AdminContact> getTenantAdmins(Long tenantId) {

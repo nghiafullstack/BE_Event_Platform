@@ -11,6 +11,7 @@ x-app-env: &app-env
   JWT_SECRET: ${JWT_SECRET}
   JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
   JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-604800000}
+  INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
   IDENTITY_SERVICE_URL: http://identity-service:8081
   CATALOG_SERVICE_URL: http://catalog-service:8082
   EVENT_SERVICE_URL: http://event-service:8083
@@ -129,8 +130,9 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       FCM_CREDENTIALS_JSON: ${FCM_CREDENTIALS_JSON}
+      FCM_TOKEN_RETENTION_DAYS: ${FCM_TOKEN_RETENTION_DAYS:-90}
     depends_on:
-      redis:
+      mysql:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy

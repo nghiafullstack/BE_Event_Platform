@@ -23,6 +23,7 @@ public class AssignmentResponse {
     private String location;
 
     private Long userId;
+    private String userFullName;
     private String position;
     private String status;
     private String note;
@@ -44,6 +45,7 @@ public class AssignmentResponse {
     @AllArgsConstructor
     public static class Teammate {
         private Long userId;
+        private String fullName;
         private String position;
         private String status;
     }

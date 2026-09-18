@@ -1,0 +1,41 @@
+package org.example.eventplatform.catalog.controller;
+
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import org.example.eventplatform.catalog.dto.internal.VendorProfileSummaryResponse;
+import org.example.eventplatform.catalog.entity.ServiceCategory;
+import org.example.eventplatform.catalog.entity.VendorProfile;
+import org.example.eventplatform.catalog.repository.ServiceCategoryRepository;
+import org.example.eventplatform.catalog.repository.VendorProfileRepository;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * Service-to-service only — guarded by {@code X-Internal-Token}.
+ */
+@RestController
+@RequestMapping("/api/internal")
+@RequiredArgsConstructor
+public class InternalController {
+
+    private final VendorProfileRepository vendorProfileRepository;
+    private final ServiceCategoryRepository serviceCategoryRepository;
+
+    @GetMapping("/vendor-profiles/by-tenant/{tenantId}")
+    public ResponseEntity<VendorProfileSummaryResponse> getByTenant(@PathVariable Long tenantId) {
+        VendorProfile profile = vendorProfileRepository.findByTenantId(tenantId)
+                .orElseThrow(() -> new EntityNotFoundException("Tenant chưa có hồ sơ vendor: " + tenantId));
+        ServiceCategory category = serviceCategoryRepository.findById(profile.getServiceCategoryId()).orElse(null);
+        return ResponseEntity.ok(VendorProfileSummaryResponse.builder()
+                .id(profile.getId())
+                .tenantId(profile.getTenantId())
+                .serviceCategoryId(profile.getServiceCategoryId())
+                .serviceCategoryName(category != null ? category.getName() : null)
+                .businessName(profile.getBusinessName())
+                .active(profile.isActive())
+                .build());
+    }
+}

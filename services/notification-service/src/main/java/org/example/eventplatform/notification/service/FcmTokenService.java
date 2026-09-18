@@ -1,32 +1,79 @@
 package org.example.eventplatform.notification.service;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import lombok.extern.slf4j.Slf4j;
+import org.example.eventplatform.notification.entity.FcmToken;
+import org.example.eventplatform.notification.repository.FcmTokenRepository;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Set;
+import java.time.LocalDateTime;
+import java.util.List;
 
-/**
- * FCM tokens are per-device, short-lived, and rotate often — a Redis set is
- * enough, no need for the dedicated relational DB the plan otherwise gives
- * every service.
- */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class FcmTokenService {
 
-    private final StringRedisTemplate redisTemplate;
+    private final FcmTokenRepository fcmTokenRepository;
 
+    @Value("${fcm.token-retention-days:90}")
+    private int tokenRetentionDays;
+
+    @Transactional
     public void registerToken(Long userId, String token) {
-        redisTemplate.opsForSet().add(key(userId), token);
+        LocalDateTime now = LocalDateTime.now();
+        FcmToken existing = fcmTokenRepository.findByToken(token).orElse(null);
+        if (existing != null) {
+            existing.setUserId(userId);
+            existing.setLastSeenAt(now);
+            fcmTokenRepository.save(existing);
+            return;
+        }
+        fcmTokenRepository.save(FcmToken.builder()
+                .userId(userId)
+                .token(token)
+                .lastSeenAt(now)
+                .build());
     }
 
-    public Set<String> getTokens(Long userId) {
-        Set<String> tokens = redisTemplate.opsForSet().members(key(userId));
-        return tokens != null ? tokens : Set.of();
+    @Transactional
+    public void unregisterToken(Long userId, String token) {
+        fcmTokenRepository.deleteByUserIdAndToken(userId, token);
     }
 
-    private String key(Long userId) {
-        return "fcm:user:" + userId;
+    @Transactional(readOnly = true)
+    public List<FcmToken> getTokens(Long userId) {
+        return fcmTokenRepository.findByUserId(userId);
+    }
+
+    @Transactional
+    public void touchToken(String token) {
+        fcmTokenRepository.findByToken(token).ifPresent(stored -> {
+            stored.setLastSeenAt(LocalDateTime.now());
+            fcmTokenRepository.save(stored);
+        });
+    }
+
+    @Transactional
+    public void removeInvalidToken(String token) {
+        int removed = fcmTokenRepository.deleteByToken(token);
+        if (removed > 0) {
+            String suffix = token.length() > 8 ? token.substring(token.length() - 8) : token;
+            log.info("Removed invalid FCM token ending ...{}", suffix);
+        }
+    }
+
+    /** Nightly purge of tokens not seen for {@code fcm.token-retention-days}. */
+    @Scheduled(cron = "0 30 3 * * *")
+    @Transactional
+    public void purgeStaleTokens() {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(tokenRetentionDays);
+        int deleted = fcmTokenRepository.deleteByLastSeenAtBefore(cutoff);
+        if (deleted > 0) {
+            log.info("Purged {} stale FCM tokens older than {} days", deleted, tokenRetentionDays);
+        }
     }
 }

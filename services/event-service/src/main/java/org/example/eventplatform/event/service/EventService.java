@@ -2,6 +2,9 @@ package org.example.eventplatform.event.service;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.example.eventplatform.event.client.CatalogServiceClient;
+import org.example.eventplatform.event.client.CustomerServiceClient;
+import org.example.eventplatform.event.client.IdentityServiceClient;
 import org.example.eventplatform.event.dto.*;
 import org.example.eventplatform.event.entity.AssignStatus;
 import org.example.eventplatform.event.entity.Event;
@@ -21,8 +24,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -33,9 +40,20 @@ public class EventService {
     private final EventRepository eventRepository;
     private final UserEventRepository userEventRepository;
     private final NotificationPublisher notificationPublisher;
+    private final IdentityServiceClient identityServiceClient;
+    private final CustomerServiceClient customerServiceClient;
+    private final CatalogServiceClient catalogServiceClient;
 
     @Transactional
     public EventResponse createEvent(EventRequest request, JwtPrincipal principal) {
+        boolean isTenantAdmin = principal != null && principal.authorities().contains("ROLE_ADMIN");
+        Long targetTenantId = isTenantAdmin ? principal.tenantId() : request.getTenantId();
+
+        CustomerServiceClient.CustomerSummary customer = customerServiceClient.requireCustomer(request.getCustomerId());
+        if (targetTenantId != null && customer.tenantId() != null && !targetTenantId.equals(customer.tenantId())) {
+            throw new IllegalArgumentException("Khách hàng không thuộc tenant được gán cho show này");
+        }
+
         Event event = Event.builder()
                 .name(request.getName())
                 .type(request.getType())
@@ -51,7 +69,6 @@ public class EventService {
                 .status(EventStatus.SCHEDULED)
                 .build();
 
-        boolean isTenantAdmin = principal != null && principal.authorities().contains("ROLE_ADMIN");
         if (isTenantAdmin) {
             event.setTenantId(principal.tenantId());
             event.setPlatformFee(BigDecimal.ZERO);
@@ -77,22 +94,28 @@ public class EventService {
     @Transactional(readOnly = true)
     public EventWithMembersResponse getEventDetailWithMembers(Long id) {
         Event event = getEventOrThrow(id);
-        List<AssignmentResponse> members = userEventRepository.findByEventId(id).stream()
-                .map(this::toAssignmentResponse)
+        List<UserEvent> assignments = userEventRepository.findByEventId(id);
+        Map<Long, IdentityServiceClient.UserContact> users = identityServiceClient.findUsersByIds(
+                assignments.stream().map(UserEvent::getUserId).collect(Collectors.toSet())
+        );
+        List<AssignmentResponse> members = assignments.stream()
+                .map(ue -> toAssignmentResponse(ue, users))
                 .toList();
         return EventWithMembersResponse.builder().eventInfo(toResponse(event)).members(members).build();
     }
 
     @Transactional(readOnly = true)
     public Page<EventResponse> getTenantEvents(Long tenantId, Pageable pageable) {
-        return eventRepository.findByTenantId(tenantId, pageable).map(this::toResponse);
+        TenantVendorContext ctx = TenantVendorContext.fetch(tenantId, identityServiceClient, catalogServiceClient);
+        return eventRepository.findByTenantId(tenantId, pageable).map(e -> toResponse(e, ctx));
     }
 
     @Transactional(readOnly = true)
     public Page<EventResponse> getTenantSchedule(Long tenantId, int month, int year, Pageable pageable) {
         LocalDate start = LocalDate.of(year, month, 1);
         LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
-        return eventRepository.findByTenantIdAndEventDateBetween(tenantId, start, end, pageable).map(this::toResponse);
+        TenantVendorContext ctx = TenantVendorContext.fetch(tenantId, identityServiceClient, catalogServiceClient);
+        return eventRepository.findByTenantIdAndEventDateBetween(tenantId, start, end, pageable).map(e -> toResponse(e, ctx));
     }
 
     @Transactional(readOnly = true)
@@ -104,7 +127,7 @@ public class EventService {
         BigDecimal revenue = events.stream()
                 .filter(e -> e.getStatus() != EventStatus.CANCELLED)
                 .map(Event::getTotalAmount)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         long completed = events.stream().filter(e -> e.getStatus() == EventStatus.COMPLETED).count();
@@ -137,6 +160,18 @@ public class EventService {
     public void assignMembers(Long eventId, Long tenantId, List<AssignMemberRequest> requests) {
         Event event = getEventOrThrow(eventId);
         assertOwnership(event, tenantId);
+
+        Set<Long> userIds = requests.stream().map(AssignMemberRequest::getUserId).collect(Collectors.toSet());
+        Map<Long, IdentityServiceClient.UserContact> users = identityServiceClient.findUsersByIds(userIds);
+        for (AssignMemberRequest req : requests) {
+            IdentityServiceClient.UserContact user = users.get(req.getUserId());
+            if (user == null) {
+                throw new IllegalArgumentException("Không tìm thấy thành viên với ID: " + req.getUserId());
+            }
+            if (user.tenantId() == null || !user.tenantId().equals(tenantId)) {
+                throw new IllegalArgumentException("Thành viên " + req.getUserId() + " không thuộc tenant của show");
+            }
+        }
 
         for (AssignMemberRequest req : requests) {
             UserEvent userEvent = userEventRepository.findByEventIdAndUserId(eventId, req.getUserId())
@@ -291,9 +326,14 @@ public class EventService {
 
     @Transactional(readOnly = true)
     public List<AssignmentResponse> getMyAssignedEvents(Long userId) {
-        return userEventRepository.findByUserId(userId).stream()
-                .map(this::toAssignmentResponse)
-                .toList();
+        List<UserEvent> mine = userEventRepository.findByUserId(userId);
+        Set<Long> allUserIds = new HashSet<>();
+        for (UserEvent ue : mine) {
+            allUserIds.add(ue.getUserId());
+            ue.getEvent().getAssignedMembers().forEach(m -> allUserIds.add(m.getUserId()));
+        }
+        Map<Long, IdentityServiceClient.UserContact> users = identityServiceClient.findUsersByIds(allUserIds);
+        return mine.stream().map(ue -> toAssignmentResponse(ue, users)).toList();
     }
 
     @Transactional(readOnly = true)
@@ -333,8 +373,19 @@ public class EventService {
         }
     }
 
+    /**
+     * Single-item reads fetch tenant/vendor themselves. List views (getTenantEvents,
+     * getTenantSchedule) share one tenantId across every row, so they fetch the
+     * tenant/vendor once via {@link #toResponse(Event, TenantVendorContext)} instead
+     * of repeating the same two HTTP calls per row.
+     */
     private EventResponse toResponse(Event event) {
-        return EventResponse.builder()
+        TenantVendorContext ctx = TenantVendorContext.fetch(event.getTenantId(), identityServiceClient, catalogServiceClient);
+        return toResponse(event, ctx);
+    }
+
+    private EventResponse toResponse(Event event, TenantVendorContext ctx) {
+        EventResponse response = EventResponse.builder()
                 .id(event.getId())
                 .name(event.getName())
                 .type(event.getType())
@@ -353,17 +404,46 @@ public class EventService {
                 .platformFee(event.getPlatformFee())
                 .createdAt(event.getCreatedAt())
                 .build();
+
+        if (response.getCustomerId() != null) {
+            CustomerServiceClient.CustomerSummary customer = customerServiceClient.findCustomer(response.getCustomerId());
+            if (customer != null) {
+                response.setCustomerName(customer.fullName());
+            }
+        }
+        if (ctx.tenant() != null) {
+            response.setTenantName(ctx.tenant().name());
+        }
+        if (ctx.vendor() != null) {
+            response.setVendorBusinessName(ctx.vendor().businessName());
+            response.setServiceCategoryName(ctx.vendor().serviceCategoryName());
+        }
+        return response;
     }
 
-    private AssignmentResponse toAssignmentResponse(UserEvent ue) {
+    private record TenantVendorContext(IdentityServiceClient.TenantSummary tenant, CatalogServiceClient.VendorProfileSummary vendor) {
+        static TenantVendorContext fetch(Long tenantId, IdentityServiceClient identityServiceClient, CatalogServiceClient catalogServiceClient) {
+            if (tenantId == null) {
+                return new TenantVendorContext(null, null);
+            }
+            return new TenantVendorContext(identityServiceClient.findTenant(tenantId), catalogServiceClient.findVendorByTenant(tenantId));
+        }
+    }
+
+    private AssignmentResponse toAssignmentResponse(UserEvent ue, Map<Long, IdentityServiceClient.UserContact> users) {
         Event event = ue.getEvent();
+        IdentityServiceClient.UserContact self = users.get(ue.getUserId());
         List<AssignmentResponse.Teammate> teammates = event.getAssignedMembers().stream()
                 .filter(m -> !m.getUserId().equals(ue.getUserId()))
-                .map(m -> AssignmentResponse.Teammate.builder()
-                        .userId(m.getUserId())
-                        .position(m.getPosition())
-                        .status(formatAssignStatus(m.getStatus()))
-                        .build())
+                .map(m -> {
+                    IdentityServiceClient.UserContact contact = users.get(m.getUserId());
+                    return AssignmentResponse.Teammate.builder()
+                            .userId(m.getUserId())
+                            .fullName(contact != null ? contact.fullName() : null)
+                            .position(m.getPosition())
+                            .status(formatAssignStatus(m.getStatus()))
+                            .build();
+                })
                 .toList();
 
         return AssignmentResponse.builder()
@@ -373,6 +453,7 @@ public class EventService {
                 .eventDate(event.getEventDate())
                 .location(event.getLocation())
                 .userId(ue.getUserId())
+                .userFullName(self != null ? self.fullName() : null)
                 .position(ue.getPosition())
                 .status(formatAssignStatus(ue.getStatus()))
                 .note(ue.getNote())

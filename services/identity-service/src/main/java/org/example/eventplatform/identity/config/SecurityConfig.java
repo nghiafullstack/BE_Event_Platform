@@ -1,8 +1,10 @@
 package org.example.eventplatform.identity.config;
 
 import lombok.RequiredArgsConstructor;
+import org.example.eventplatform.shared.security.InternalServiceAuthFilter;
 import org.example.eventplatform.shared.security.JwtAuthenticationFilter;
 import org.example.eventplatform.shared.security.JwtTokenProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -20,6 +22,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
+
+    @Value("${internal.service-token:}")
+    private String internalServiceToken;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -44,6 +49,10 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 );
 
+        http.addFilterBefore(
+                new InternalServiceAuthFilter(internalServiceToken),
+                UsernamePasswordAuthenticationFilter.class
+        );
         http.addFilterBefore(
                 new JwtAuthenticationFilter(jwtTokenProvider),
                 UsernamePasswordAuthenticationFilter.class

@@ -34,7 +34,9 @@ public class RouteTable {
                         catalogServiceUri),
                 new Route("event-service", List.of("/api/events/**", "/api/tenant/events/**"), eventServiceUri),
                 new Route("customer-service", List.of("/api/customers/**"), customerServiceUri),
-                new Route("notification-service", List.of("/api/fcm/**"), notificationServiceUri)
+                new Route("notification-service",
+                        List.of("/api/fcm/**", "/api/notifications/**"),
+                        notificationServiceUri)
         );
     }
 

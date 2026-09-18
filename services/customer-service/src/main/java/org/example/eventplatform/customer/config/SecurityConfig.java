@@ -1,8 +1,10 @@
 package org.example.eventplatform.customer.config;
 
 import lombok.RequiredArgsConstructor;
+import org.example.eventplatform.shared.security.InternalServiceAuthFilter;
 import org.example.eventplatform.shared.security.JwtAuthenticationFilter;
 import org.example.eventplatform.shared.security.JwtTokenProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -19,6 +21,9 @@ public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
 
+    @Value("${internal.service-token:}")
+    private String internalServiceToken;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -28,11 +33,16 @@ public class SecurityConfig {
                         // is itself blocked by "anyRequest().authenticated()" and the client sees
                         // an empty 403 instead of the real error body.
                         .requestMatchers("/error").permitAll()
+                        .requestMatchers("/api/internal/**").permitAll()
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 );
 
+        http.addFilterBefore(
+                new InternalServiceAuthFilter(internalServiceToken),
+                UsernamePasswordAuthenticationFilter.class
+        );
         http.addFilterBefore(
                 new JwtAuthenticationFilter(jwtTokenProvider),
                 UsernamePasswordAuthenticationFilter.class

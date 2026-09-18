@@ -30,7 +30,11 @@ public class EventResponse {
     private LocalTime endTime;
     private String location;
     private Long customerId;
+    private String customerName;
     private Long tenantId;
+    private String tenantName;
+    private String vendorBusinessName;
+    private String serviceCategoryName;
     private LocalTime concentrateTime;
     private String concentrateLocation;
     private BigDecimal totalAmount;

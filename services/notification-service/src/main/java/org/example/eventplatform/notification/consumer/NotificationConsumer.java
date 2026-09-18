@@ -4,9 +4,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.eventplatform.notification.client.AdminContact;
 import org.example.eventplatform.notification.client.IdentityServiceClient;
+import org.example.eventplatform.notification.entity.FcmToken;
 import org.example.eventplatform.notification.service.EmailService;
 import org.example.eventplatform.notification.service.FcmPushService;
 import org.example.eventplatform.notification.service.FcmTokenService;
+import org.example.eventplatform.notification.service.InboxNotificationService;
 import org.example.eventplatform.shared.messaging.NotificationMessage;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
@@ -25,28 +27,31 @@ public class NotificationConsumer {
     private final FcmTokenService fcmTokenService;
     private final FcmPushService fcmPushService;
     private final EmailService emailService;
+    private final InboxNotificationService inboxNotificationService;
 
     @RabbitListener(queues = "${notification.queue-name}")
     public void handle(NotificationMessage message) {
         log.info("Received notification {} type={}", message.id(), message.type());
 
         List<AdminContact> tenantAdmins = List.of();
-        List<Long> pushRecipients;
+        List<Long> recipients;
 
         if (message.recipientUserId() != null) {
-            pushRecipients = List.of(message.recipientUserId());
+            recipients = List.of(message.recipientUserId());
         } else if (message.tenantId() != null) {
             tenantAdmins = identityServiceClient.getTenantAdmins(message.tenantId());
-            pushRecipients = tenantAdmins.stream().map(AdminContact::userId).toList();
+            recipients = tenantAdmins.stream().map(AdminContact::userId).toList();
         } else {
             log.warn("Notification {} has neither recipientUserId nor tenantId — dropping", message.id());
-            pushRecipients = List.of();
+            recipients = List.of();
         }
 
         Map<String, String> data = message.data() != null ? message.data() : Map.of();
-        for (Long userId : pushRecipients) {
-            fcmTokenService.getTokens(userId)
-                    .forEach(token -> fcmPushService.sendPush(token, message.title(), message.body(), data));
+        for (Long userId : recipients) {
+            inboxNotificationService.saveIfAbsent(userId, message);
+            for (FcmToken token : fcmTokenService.getTokens(userId)) {
+                fcmPushService.sendPush(token.getToken(), message.title(), message.body(), data);
+            }
         }
 
         if (TYPE_MEMBER_REJECTED.equals(message.type())) {

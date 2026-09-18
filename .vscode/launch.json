@@ -1,0 +1,73 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "identity-service",
+      "request": "launch",
+      "mainClass": "org.example.eventplatform.identity.IdentityServiceApplication",
+      "projectName": "identity-service",
+      "cwd": "${workspaceFolder}/services/identity-service",
+      "envFile": "${workspaceFolder}/services/identity-service/.env"
+    },
+    {
+      "type": "java",
+      "name": "catalog-service",
+      "request": "launch",
+      "mainClass": "org.example.eventplatform.catalog.CatalogServiceApplication",
+      "projectName": "catalog-service",
+      "cwd": "${workspaceFolder}/services/catalog-service",
+      "envFile": "${workspaceFolder}/services/catalog-service/.env"
+    },
+    {
+      "type": "java",
+      "name": "event-service",
+      "request": "launch",
+      "mainClass": "org.example.eventplatform.event.EventServiceApplication",
+      "projectName": "event-service",
+      "cwd": "${workspaceFolder}/services/event-service",
+      "envFile": "${workspaceFolder}/services/event-service/.env"
+    },
+    {
+      "type": "java",
+      "name": "customer-service",
+      "request": "launch",
+      "mainClass": "org.example.eventplatform.customer.CustomerServiceApplication",
+      "projectName": "customer-service",
+      "cwd": "${workspaceFolder}/services/customer-service",
+      "envFile": "${workspaceFolder}/services/customer-service/.env"
+    },
+    {
+      "type": "java",
+      "name": "notification-service",
+      "request": "launch",
+      "mainClass": "org.example.eventplatform.notification.NotificationServiceApplication",
+      "projectName": "notification-service",
+      "cwd": "${workspaceFolder}/services/notification-service",
+      "envFile": "${workspaceFolder}/services/notification-service/.env"
+    },
+    {
+      "type": "java",
+      "name": "api-gateway",
+      "request": "launch",
+      "mainClass": "org.example.eventplatform.gateway.ApiGatewayApplication",
+      "projectName": "api-gateway",
+      "cwd": "${workspaceFolder}/services/api-gateway",
+      "envFile": "${workspaceFolder}/services/api-gateway/.env"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "all-services",
+      "configurations": [
+        "identity-service",
+        "catalog-service",
+        "event-service",
+        "customer-service",
+        "notification-service",
+        "api-gateway"
+      ],
+      "stopAll": true
+    }
+  ]
+}
