@@ -28,11 +28,16 @@ public class RouteTable {
                        @Value("${services.customer-service.uri}") String customerServiceUri,
                        @Value("${services.notification-service.uri}") String notificationServiceUri) {
         this.routes = List.of(
-                new Route("identity-service", List.of("/api/auth/**", "/api/tenants/**"), identityServiceUri),
+                new Route("identity-service",
+                        List.of("/api/auth/**", "/api/tenants/**", "/api/users/**"),
+                        identityServiceUri),
                 new Route("catalog-service",
                         List.of("/api/service-categories/**", "/api/vendor-profiles/**", "/api/tenant/vendor-profile"),
                         catalogServiceUri),
-                new Route("event-service", List.of("/api/events/**", "/api/tenant/events/**"), eventServiceUri),
+                new Route("event-service",
+                        List.of("/api/events/**", "/api/tenant/events/**", "/api/tenant/crew-roles/**",
+                                "/api/tenant/show-packages/**"),
+                        eventServiceUri),
                 new Route("customer-service", List.of("/api/customers/**"), customerServiceUri),
                 new Route("notification-service",
                         List.of("/api/fcm/**", "/api/notifications/**"),
