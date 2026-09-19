@@ -487,6 +487,23 @@ show có package/deposit/GPS → gán thành viên bằng `crewRoleId` (tự suy
 kính bị từ chối đúng khoảng cách, check-in trong bán kính thành công → check-out → set payroll 4 dòng ra
 đúng tổng → dashboard thành viên cộng đúng tổng thu nhập mới.
 
+### 2 vấn đề khác phát hiện khi nối app Flutter thật vào (không phải lúc test bằng curl)
+
+1. **Thiếu route cho 3 endpoint mới trong `RouteTable`** — `/api/users/**`,
+   `/api/tenant/crew-roles/**`, `/api/tenant/show-packages/**` chưa được thêm vào gateway khi thêm
+   controller ở lần trước, nên gọi qua gateway (`:8080`) ra 404 dù gọi thẳng service (`:8081`/`:8083`)
+   vẫn đúng — curl trực tiếp từng service không phát hiện ra vì luôn test bỏ qua gateway.
+2. **`AssignmentResponse.status` chỉ trả chuỗi tiếng Việt đã format (`"Đang mời"`), không có field enum
+   gốc** — khác với `EventResponse` (có cả `status` enum lẫn `statusDisplayName`). App Flutter so sánh
+   trạng thái để hiện nút hành động (nhận show/check-in/check-out) dựa theo enum gốc nên không nút nào
+   hiện ra được. Sửa: `AssignmentResponse`/`Teammate` giờ có cả `status` (enum `AssignStatus`) lẫn
+   `statusDisplayName` (chuỗi hiển thị), giống hệt quy ước của `EventResponse`.
+3. **Gateway thiếu CORS** — chưa cần vì trước giờ chỉ gọi bằng curl/app native. Flutter web (dùng để
+   test nhanh qua trình duyệt, không cần simulator) bị chặn bởi CORS preflight. Thêm xử lý `OPTIONS` +
+   header `Access-Control-Allow-*` ngay trong `GatewayProxyFilter` (wildcard origin — auth ở đây luôn là
+   Bearer header do client tự đính kèm, không phải cookie, nên không có rủi ro CSRF của wildcard CORS).
+   Cũng cần cho web admin sàn ở Phase 8 sau này.
+
 ## Ghi chú bảo mật
 
 - Không commit `.env`. `.env.example` chỉ chứa placeholder.

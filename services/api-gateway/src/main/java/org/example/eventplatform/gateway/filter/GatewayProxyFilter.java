@@ -62,6 +62,12 @@ public class GatewayProxyFilter implements WebFilter, Ordered {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getPath().value();
 
+        addCorsHeaders(exchange);
+        if (request.getMethod() == HttpMethod.OPTIONS) {
+            exchange.getResponse().setStatusCode(HttpStatus.NO_CONTENT);
+            return exchange.getResponse().setComplete();
+        }
+
         RouteTable.Route route = routeTable.resolve(path);
         if (route == null) {
             return respond(exchange, HttpStatus.NOT_FOUND, "NOT_FOUND", "Không có route cho " + path);
@@ -75,6 +81,18 @@ public class GatewayProxyFilter implements WebFilter, Ordered {
         }
 
         return proxy(exchange, route);
+    }
+
+    // Wide open by design: auth here is a Bearer header the client attaches itself
+    // (never a cookie), so a wildcard origin carries none of the CSRF risk it would
+    // for cookie-based auth. Needed for the Flutter web build and the future web
+    // admin (Phase 8) to call the gateway from a different origin during dev.
+    private void addCorsHeaders(ServerWebExchange exchange) {
+        HttpHeaders headers = exchange.getResponse().getHeaders();
+        headers.add("Access-Control-Allow-Origin", "*");
+        headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+        headers.add("Access-Control-Allow-Headers", "*");
+        headers.add("Access-Control-Max-Age", "3600");
     }
 
     private Mono<Void> proxy(ServerWebExchange exchange, RouteTable.Route route) {

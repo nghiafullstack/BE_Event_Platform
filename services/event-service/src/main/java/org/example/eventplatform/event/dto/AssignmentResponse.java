@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.example.eventplatform.event.entity.AssignStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -29,7 +30,8 @@ public class AssignmentResponse {
     private Long crewRoleId;
     private String crewRoleDepartment;
     private String crewRoleName;
-    private String status;
+    private AssignStatus status;
+    private String statusDisplayName;
     private String note;
 
     private LocalTime actualConcentrateAt;
@@ -59,6 +61,7 @@ public class AssignmentResponse {
         private Long crewRoleId;
         private String crewRoleDepartment;
         private String crewRoleName;
-        private String status;
+        private AssignStatus status;
+        private String statusDisplayName;
     }
 }

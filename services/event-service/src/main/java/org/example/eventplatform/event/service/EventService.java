@@ -564,7 +564,8 @@ public class EventService {
                             .crewRoleId(m.getCrewRoleId())
                             .crewRoleDepartment(role != null ? role.getDepartment() : null)
                             .crewRoleName(role != null ? role.getName() : null)
-                            .status(formatAssignStatus(m.getStatus()))
+                            .status(m.getStatus())
+                            .statusDisplayName(formatAssignStatus(m.getStatus()))
                             .build();
                 })
                 .toList();
@@ -585,7 +586,8 @@ public class EventService {
                 .crewRoleId(ue.getCrewRoleId())
                 .crewRoleDepartment(ownRole != null ? ownRole.getDepartment() : null)
                 .crewRoleName(ownRole != null ? ownRole.getName() : null)
-                .status(formatAssignStatus(ue.getStatus()))
+                .status(ue.getStatus())
+                .statusDisplayName(formatAssignStatus(ue.getStatus()))
                 .note(ue.getNote())
                 .actualConcentrateAt(ue.getActualConcentrateAt())
                 .checkinAt(ue.getCheckinAt())
