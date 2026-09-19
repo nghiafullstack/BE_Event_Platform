@@ -438,6 +438,55 @@ Tối ưu N+1: `EventService.getTenantEvents`/`getTenantSchedule` (list phân tr
    tự `objectMapper.writeValueAsString(envelope)` rồi trả chuỗi JSON đó (đồng thời set lại
    `Content-Type: application/json` vì mặc định của converter này là `text/plain`).
 
+## Phase 7 (backend) — mở rộng theo thiết kế Figma vendor app
+
+Figma (`LaptopHN-Software-2026`) thiết kế app vendor (Đoàn Lân Sư Rồng, phía admin + member) chi tiết hơn
+nhiều so với API gốc ở Phase 1-6 — quyết định **mở rộng backend trước khi viết Flutter** để app nối thẳng
+vào API thật ngay từ đầu, không phải chờ sửa lại. Phần "Admin Web / Sàn Sự Kiện Việt" trong cùng file Figma
+là Phase 8 (web admin sàn), không thuộc phần này.
+
+**identity-service:**
+- `User` thêm `availabilityStatus` (`ACTIVE`/`ON_LEAVE`/`RESTING`) — badge "tạm nghỉ/dưỡng sức" ở màn quản
+  lý thành viên.
+- `UserController` mới (`/api/users`, ADMIN-only, scope theo tenant của JWT) — **đây là API còn thiếu hoàn
+  toàn từ Phase 1**: trước giờ không có cách nào tạo tài khoản thành viên (`TN_MEMBER`) ngoài thao tác tay
+  vào DB, nên "gán thành viên" ở Phase 2 chỉ test được bằng cách tái sử dụng tài khoản admin. Endpoint:
+  `GET /api/users` (list + phân trang), `POST /api/users` (tạo, role mặc định `TN_MEMBER`, chỉ được chọn
+  `ADMIN`/`TN_MEMBER`), `GET /api/users/{id}`, `PATCH /api/users/{id}/availability`.
+- `UserContactResponse`/`IdentityServiceClient.UserContact` (internal, event-service gọi sang) thêm
+  `availabilityStatus` để event-service ghép vào màn quản lý thành viên sau này.
+
+**event-service — 2 danh mục mới theo tenant** (sống trong `event_db`, không phải catalog-service, vì đây
+là cấu hình vận hành show của riêng từng tenant, không phải hồ sơ công khai):
+- `CrewRole` (`/api/tenant/crew-roles`, ADMIN CRUD) — bộ phận + tên vị trí biểu diễn tự định nghĩa
+  (VD bộ phận "Múa Lân" → vị trí "Đầu Lân 1"), thay cho gõ tay `position` tự do.
+- `ShowPackage` (`/api/tenant/show-packages`, ADMIN CRUD) — gói biểu diễn tự định nghĩa (tên/mô tả/giá),
+  chọn khi tạo show.
+
+**`Event` thêm:** `packageId`/`packageName` (chọn từ `ShowPackage`, tên denormalize để không vỡ nếu gói bị
+sửa/xoá sau), `depositAmount`, `vehicleInfo`, `venueLat`/`venueLng`/`checkinRadiusMeters` (toạ độ điểm diễn
+thật + bán kính cho phép check-in, mặc định 100m nếu để trống). `EventResponse` trả thêm `depositPercent`
+tính từ `depositAmount / totalAmount`.
+
+**`UserEvent` thêm:**
+- `crewRoleId` — `POST .../assign` giờ nhận thêm `crew_role_id` (tuỳ chọn); nếu có và không gửi kèm
+  `position`, tên vị trí trong catalog tự trở thành `position` hiển thị. Response (`AssignmentResponse` +
+  `Teammate`) trả kèm `crew_role_department`/`crew_role_name`.
+- `checkinLat`/`checkinLng` — `POST .../check-in` nhận thêm `lat`/`lng` (tuỳ chọn). Nếu `Event` có cấu hình
+  toạ độ điểm diễn, service tính khoảng cách (Haversine, `GeoUtils`) và **từ chối check-in** nếu vượt bán
+  kính cho phép (`400` kèm khoảng cách thực tế trong message). Không cấu hình toạ độ → bỏ qua kiểm tra,
+  giữ tương thích ngược với show cũ.
+- `payrollItems` (entity con `UserEventPayrollItem`: label + amount) — thay cho 1 field `salary` cứng, cho
+  phép liệt kê lương chính/thưởng/phụ cấp/lì xì linh hoạt như Figma. `PATCH
+  .../assignments/{id}/payroll` (ADMIN, body là mảng `{label, amount}`) ghi đè toàn bộ danh sách và tự tính
+  lại `salary` = tổng các item — dashboard thu nhập (`sumTotalEarnings`) không cần sửa vì vẫn cộng cùng
+  cột `salary` như trước.
+
+Đã verify end-to-end bằng curl: tạo member mới qua `UserController` → tạo crew role + show package → tạo
+show có package/deposit/GPS → gán thành viên bằng `crewRoleId` (tự suy ra tên vị trí) → check-in ngoài bán
+kính bị từ chối đúng khoảng cách, check-in trong bán kính thành công → check-out → set payroll 4 dòng ra
+đúng tổng → dashboard thành viên cộng đúng tổng thu nhập mới.
+
 ## Ghi chú bảo mật
 
 - Không commit `.env`. `.env.example` chỉ chứa placeholder.

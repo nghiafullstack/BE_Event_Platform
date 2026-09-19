@@ -1,4 +1,4 @@
-package org.example.eventplatform.identity.dto.internal;
+package org.example.eventplatform.identity.dto.user;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,11 +12,14 @@ import org.example.eventplatform.identity.entity.AvailabilityStatus;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserContactResponse {
-    private Long userId;
-    private Long tenantId;
+public class MemberResponse {
+    private Long id;
     private String username;
     private String fullName;
     private String email;
+    private String phone;
+    private Long tenantId;
+    private String roleName;
+    private Boolean isActive;
     private AvailabilityStatus availabilityStatus;
 }

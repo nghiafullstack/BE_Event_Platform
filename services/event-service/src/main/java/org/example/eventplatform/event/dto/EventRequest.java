@@ -48,4 +48,17 @@ public class EventRequest {
 
     private LocalTime concentrateTime;
     private String concentrateLocation;
+
+    // Gói biểu diễn tự chọn từ danh mục của tenant — để trống nếu không dùng gói có sẵn.
+    private Long packageId;
+
+    @DecimalMin(value = "0.0")
+    private BigDecimal depositAmount;
+
+    private String vehicleInfo;
+
+    // Toạ độ điểm diễn thực tế — dùng để validate bán kính check-in của thành viên.
+    private Double venueLat;
+    private Double venueLng;
+    private Integer checkinRadiusMeters;
 }

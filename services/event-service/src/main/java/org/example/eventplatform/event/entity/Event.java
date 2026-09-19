@@ -55,6 +55,30 @@ public class Event extends BaseEntity {
     @Column(name = "description", columnDefinition = "LONGTEXT")
     private String description;
 
+    // ShowPackage lives in this same service/DB, but is still looked up by id
+    // (not a JPA relation) — a package is a catalog pick, not an ownership link,
+    // and its name is denormalized here so it survives the package being edited/deleted later.
+    @Column(name = "package_id")
+    private Long packageId;
+
+    @Column(name = "package_name")
+    private String packageName;
+
+    @Column(name = "deposit_amount")
+    private BigDecimal depositAmount;
+
+    @Column(name = "vehicle_info")
+    private String vehicleInfo;
+
+    @Column(name = "venue_lat")
+    private Double venueLat;
+
+    @Column(name = "venue_lng")
+    private Double venueLng;
+
+    @Column(name = "checkin_radius_meters")
+    private Integer checkinRadiusMeters;
+
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<UserEvent> assignedMembers = new ArrayList<>();

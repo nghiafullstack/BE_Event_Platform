@@ -39,5 +39,13 @@ public class EventResponse {
     private String concentrateLocation;
     private BigDecimal totalAmount;
     private BigDecimal platformFee;
+    private Long packageId;
+    private String packageName;
+    private BigDecimal depositAmount;
+    private BigDecimal depositPercent;
+    private String vehicleInfo;
+    private Double venueLat;
+    private Double venueLng;
+    private Integer checkinRadiusMeters;
     private LocalDateTime createdAt;
 }

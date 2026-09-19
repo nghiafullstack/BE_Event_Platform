@@ -93,6 +93,7 @@ public class IdentityServiceClient {
     public record TenantSummary(Long id, String name, String domain, String email, boolean active) {
     }
 
-    public record UserContact(Long userId, Long tenantId, String username, String fullName, String email) {
+    public record UserContact(Long userId, Long tenantId, String username, String fullName, String email,
+                               String availabilityStatus) {
     }
 }

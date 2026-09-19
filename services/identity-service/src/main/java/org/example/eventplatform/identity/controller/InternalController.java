@@ -79,6 +79,7 @@ public class InternalController {
                 .username(user.getUsername())
                 .fullName(user.getFullName())
                 .email(user.getEmail())
+                .availabilityStatus(user.getAvailabilityStatus())
                 .build();
     }
 

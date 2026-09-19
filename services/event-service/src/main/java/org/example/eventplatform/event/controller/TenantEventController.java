@@ -131,14 +131,25 @@ public class TenantEventController {
     public ResponseEntity<String> checkIn(
             @AuthenticationPrincipal JwtPrincipal principal,
             @PathVariable Long userEventId,
-            @RequestParam String location) {
-        eventService.checkIn(userEventId, principal, location);
+            @RequestParam String location,
+            @RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lng) {
+        eventService.checkIn(userEventId, principal, location, lat, lng);
         return ResponseEntity.ok("Check-in thành công!");
     }
 
     @PostMapping("/assignments/{userEventId}/check-out")
     public ResponseEntity<String> checkOut(@AuthenticationPrincipal JwtPrincipal principal, @PathVariable Long userEventId) {
         return ResponseEntity.ok(eventService.checkOut(userEventId, principal));
+    }
+
+    @PatchMapping("/assignments/{userEventId}/payroll")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<AssignmentResponse> setPayroll(
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @PathVariable Long userEventId,
+            @Valid @RequestBody List<PayrollItemRequest> items) {
+        return ResponseEntity.ok(eventService.setPayrollItems(userEventId, principal.tenantId(), items));
     }
 
     @GetMapping("/dashboard-member/{userId}")

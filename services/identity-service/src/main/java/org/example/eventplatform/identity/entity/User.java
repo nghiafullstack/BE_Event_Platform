@@ -53,6 +53,11 @@ public class User extends BaseEntity {
     @Column(name = "status_confirm", length = 30)
     private RegistrationStatus statusConfirm = RegistrationStatus.PENDING_VERIFICATION;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "availability_status", length = 30)
+    @Builder.Default
+    private AvailabilityStatus availabilityStatus = AvailabilityStatus.ACTIVE;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "role_id")
     private Role roles;

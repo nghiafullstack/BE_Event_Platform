@@ -7,11 +7,17 @@ import org.example.eventplatform.event.client.CustomerServiceClient;
 import org.example.eventplatform.event.client.IdentityServiceClient;
 import org.example.eventplatform.event.dto.*;
 import org.example.eventplatform.event.entity.AssignStatus;
+import org.example.eventplatform.event.entity.CrewRole;
 import org.example.eventplatform.event.entity.Event;
 import org.example.eventplatform.event.entity.EventStatus;
+import org.example.eventplatform.event.entity.ShowPackage;
 import org.example.eventplatform.event.entity.UserEvent;
+import org.example.eventplatform.event.entity.UserEventPayrollItem;
+import org.example.eventplatform.event.repository.CrewRoleRepository;
 import org.example.eventplatform.event.repository.EventRepository;
+import org.example.eventplatform.event.repository.ShowPackageRepository;
 import org.example.eventplatform.event.repository.UserEventRepository;
+import org.example.eventplatform.event.util.GeoUtils;
 import org.example.eventplatform.shared.security.JwtPrincipal;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -24,6 +30,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -37,8 +44,12 @@ public class EventService {
 
     private static final DateTimeFormatter HOUR_MINUTE = DateTimeFormatter.ofPattern("HH:mm");
 
+    private static final int DEFAULT_CHECKIN_RADIUS_METERS = 100;
+
     private final EventRepository eventRepository;
     private final UserEventRepository userEventRepository;
+    private final ShowPackageRepository showPackageRepository;
+    private final CrewRoleRepository crewRoleRepository;
     private final NotificationPublisher notificationPublisher;
     private final IdentityServiceClient identityServiceClient;
     private final CustomerServiceClient customerServiceClient;
@@ -54,6 +65,15 @@ public class EventService {
             throw new IllegalArgumentException("Khách hàng không thuộc tenant được gán cho show này");
         }
 
+        ShowPackage selectedPackage = null;
+        if (request.getPackageId() != null) {
+            if (targetTenantId == null) {
+                throw new IllegalArgumentException("Chỉ có thể chọn gói show khi đã xác định tenant thực hiện");
+            }
+            selectedPackage = showPackageRepository.findByIdAndTenantId(request.getPackageId(), targetTenantId)
+                    .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy gói show với ID: " + request.getPackageId()));
+        }
+
         Event event = Event.builder()
                 .name(request.getName())
                 .type(request.getType())
@@ -66,6 +86,13 @@ public class EventService {
                 .description(request.getDescription())
                 .concentrateTime(request.getConcentrateTime())
                 .concentrateLocation(request.getConcentrateLocation())
+                .packageId(selectedPackage != null ? selectedPackage.getId() : null)
+                .packageName(selectedPackage != null ? selectedPackage.getName() : null)
+                .depositAmount(request.getDepositAmount())
+                .vehicleInfo(request.getVehicleInfo())
+                .venueLat(request.getVenueLat())
+                .venueLng(request.getVenueLng())
+                .checkinRadiusMeters(request.getCheckinRadiusMeters())
                 .status(EventStatus.SCHEDULED)
                 .build();
 
@@ -86,6 +113,14 @@ public class EventService {
         return totalAmount != null ? totalAmount.multiply(new BigDecimal("0.1")) : BigDecimal.ZERO;
     }
 
+    private BigDecimal computeDepositPercent(BigDecimal depositAmount, BigDecimal totalAmount) {
+        if (depositAmount == null || totalAmount == null || totalAmount.signum() == 0) {
+            return null;
+        }
+        return depositAmount.divide(totalAmount, 4, java.math.RoundingMode.HALF_UP)
+                .multiply(new BigDecimal("100"));
+    }
+
     @Transactional(readOnly = true)
     public EventResponse getEventDetail(Long id) {
         return toResponse(getEventOrThrow(id));
@@ -98,10 +133,25 @@ public class EventService {
         Map<Long, IdentityServiceClient.UserContact> users = identityServiceClient.findUsersByIds(
                 assignments.stream().map(UserEvent::getUserId).collect(Collectors.toSet())
         );
+        Map<Long, CrewRole> crewRoles = fetchCrewRoles(assignments);
         List<AssignmentResponse> members = assignments.stream()
-                .map(ue -> toAssignmentResponse(ue, users))
+                .map(ue -> toAssignmentResponse(ue, users, crewRoles))
                 .toList();
         return EventWithMembersResponse.builder().eventInfo(toResponse(event)).members(members).build();
+    }
+
+    private Map<Long, CrewRole> fetchCrewRoles(List<UserEvent> assignments) {
+        Set<Long> crewRoleIds = assignments.stream()
+                .flatMap(ue -> java.util.stream.Stream.concat(
+                        java.util.stream.Stream.of(ue.getCrewRoleId()),
+                        ue.getEvent().getAssignedMembers().stream().map(UserEvent::getCrewRoleId)))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (crewRoleIds.isEmpty()) {
+            return Map.of();
+        }
+        return crewRoleRepository.findAllById(crewRoleIds).stream()
+                .collect(Collectors.toMap(CrewRole::getId, r -> r));
     }
 
     @Transactional(readOnly = true)
@@ -173,12 +223,31 @@ public class EventService {
             }
         }
 
+        Set<Long> crewRoleIds = requests.stream()
+                .map(AssignMemberRequest::getCrewRoleId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, CrewRole> crewRoles = crewRoleIds.isEmpty() ? Map.of() : crewRoleRepository.findAllById(crewRoleIds).stream()
+                .collect(Collectors.toMap(CrewRole::getId, r -> r));
+        for (Long crewRoleId : crewRoleIds) {
+            CrewRole role = crewRoles.get(crewRoleId);
+            if (role == null || !role.getTenantId().equals(tenantId)) {
+                throw new IllegalArgumentException("Không tìm thấy vị trí biểu diễn với ID: " + crewRoleId);
+            }
+        }
+
         for (AssignMemberRequest req : requests) {
+            CrewRole role = req.getCrewRoleId() != null ? crewRoles.get(req.getCrewRoleId()) : null;
+            String position = (req.getPosition() != null && !req.getPosition().isBlank())
+                    ? req.getPosition()
+                    : (role != null ? role.getName() : req.getPosition());
+
             UserEvent userEvent = userEventRepository.findByEventIdAndUserId(eventId, req.getUserId())
                     .orElse(new UserEvent());
             userEvent.setEvent(event);
             userEvent.setUserId(req.getUserId());
-            userEvent.setPosition(req.getPosition());
+            userEvent.setPosition(position);
+            userEvent.setCrewRoleId(req.getCrewRoleId());
             userEvent.setStatus(AssignStatus.PENDING);
             userEventRepository.save(userEvent);
 
@@ -187,8 +256,8 @@ public class EventService {
                     req.getUserId(),
                     tenantId,
                     "Bạn được gán vào show mới",
-                    "Show \"" + event.getName() + "\" — vị trí " + req.getPosition(),
-                    Map.of("eventId", String.valueOf(eventId), "position", String.valueOf(req.getPosition()))
+                    "Show \"" + event.getName() + "\" — vị trí " + position,
+                    Map.of("eventId", String.valueOf(eventId), "position", String.valueOf(position))
             );
         }
 
@@ -241,7 +310,7 @@ public class EventService {
     }
 
     @Transactional
-    public void checkIn(Long userEventId, JwtPrincipal principal, String location) {
+    public void checkIn(Long userEventId, JwtPrincipal principal, String location, Double lat, Double lng) {
         UserEvent ue = getAssignmentOrThrow(userEventId);
         assertSelfOrAdmin(ue, principal);
 
@@ -249,12 +318,23 @@ public class EventService {
             throw new IllegalStateException("Bạn phải xác nhận tham gia hoặc check-in tập trung trước khi check-in điểm diễn");
         }
 
+        Event event = ue.getEvent();
+        if (lat != null && lng != null && event.getVenueLat() != null && event.getVenueLng() != null) {
+            int radius = event.getCheckinRadiusMeters() != null ? event.getCheckinRadiusMeters() : DEFAULT_CHECKIN_RADIUS_METERS;
+            double distance = GeoUtils.distanceMeters(lat, lng, event.getVenueLat(), event.getVenueLng());
+            if (distance > radius) {
+                throw new IllegalArgumentException(String.format(
+                        "Bạn đang cách sân khấu %.0fm, ngoài phạm vi cho phép (%dm)", distance, radius));
+            }
+        }
+
         ue.setCheckinAt(LocalTime.now());
         ue.setCheckinLocation(location);
+        ue.setCheckinLat(lat);
+        ue.setCheckinLng(lng);
         ue.setStatus(AssignStatus.CHECKED_IN);
         userEventRepository.save(ue);
 
-        Event event = ue.getEvent();
         if (event.getStatus() == EventStatus.CONFIRMED) {
             event.setStatus(EventStatus.IN_PROGRESS);
             eventRepository.save(event);
@@ -276,6 +356,34 @@ public class EventService {
 
         autoCompleteEventIfFinished(ue.getEvent().getId());
         return "Đã hoàn thành show diễn!";
+    }
+
+    @Transactional
+    public AssignmentResponse setPayrollItems(Long userEventId, Long tenantId, List<PayrollItemRequest> items) {
+        UserEvent ue = getAssignmentOrThrow(userEventId);
+        if (ue.getEvent().getTenantId() == null || !ue.getEvent().getTenantId().equals(tenantId)) {
+            throw new AccessDeniedException("Show này không thuộc đơn vị của bạn");
+        }
+
+        ue.getPayrollItems().clear();
+        BigDecimal total = BigDecimal.ZERO;
+        for (PayrollItemRequest item : items) {
+            ue.getPayrollItems().add(UserEventPayrollItem.builder()
+                    .userEvent(ue)
+                    .label(item.getLabel())
+                    .amount(item.getAmount())
+                    .build());
+            total = total.add(item.getAmount());
+        }
+        ue.setSalary(total);
+        UserEvent saved = userEventRepository.save(ue);
+
+        Map<Long, IdentityServiceClient.UserContact> users = identityServiceClient.findUsersByIds(Set.of(saved.getUserId()));
+        Map<Long, CrewRole> crewRoles = saved.getCrewRoleId() == null ? Map.of()
+                : crewRoleRepository.findById(saved.getCrewRoleId())
+                        .map(r -> Map.of(r.getId(), r))
+                        .orElse(Map.of());
+        return toAssignmentResponse(saved, users, crewRoles);
     }
 
     private void autoCompleteEventIfFinished(Long eventId) {
@@ -333,7 +441,8 @@ public class EventService {
             ue.getEvent().getAssignedMembers().forEach(m -> allUserIds.add(m.getUserId()));
         }
         Map<Long, IdentityServiceClient.UserContact> users = identityServiceClient.findUsersByIds(allUserIds);
-        return mine.stream().map(ue -> toAssignmentResponse(ue, users)).toList();
+        Map<Long, CrewRole> crewRoles = fetchCrewRoles(mine);
+        return mine.stream().map(ue -> toAssignmentResponse(ue, users, crewRoles)).toList();
     }
 
     @Transactional(readOnly = true)
@@ -402,6 +511,14 @@ public class EventService {
                 .concentrateLocation(event.getConcentrateLocation())
                 .totalAmount(event.getTotalAmount())
                 .platformFee(event.getPlatformFee())
+                .packageId(event.getPackageId())
+                .packageName(event.getPackageName())
+                .depositAmount(event.getDepositAmount())
+                .depositPercent(computeDepositPercent(event.getDepositAmount(), event.getTotalAmount()))
+                .vehicleInfo(event.getVehicleInfo())
+                .venueLat(event.getVenueLat())
+                .venueLng(event.getVenueLng())
+                .checkinRadiusMeters(event.getCheckinRadiusMeters())
                 .createdAt(event.getCreatedAt())
                 .build();
 
@@ -430,20 +547,30 @@ public class EventService {
         }
     }
 
-    private AssignmentResponse toAssignmentResponse(UserEvent ue, Map<Long, IdentityServiceClient.UserContact> users) {
+    private AssignmentResponse toAssignmentResponse(UserEvent ue, Map<Long, IdentityServiceClient.UserContact> users,
+                                                      Map<Long, CrewRole> crewRoles) {
         Event event = ue.getEvent();
         IdentityServiceClient.UserContact self = users.get(ue.getUserId());
+        CrewRole ownRole = ue.getCrewRoleId() != null ? crewRoles.get(ue.getCrewRoleId()) : null;
         List<AssignmentResponse.Teammate> teammates = event.getAssignedMembers().stream()
                 .filter(m -> !m.getUserId().equals(ue.getUserId()))
                 .map(m -> {
                     IdentityServiceClient.UserContact contact = users.get(m.getUserId());
+                    CrewRole role = m.getCrewRoleId() != null ? crewRoles.get(m.getCrewRoleId()) : null;
                     return AssignmentResponse.Teammate.builder()
                             .userId(m.getUserId())
                             .fullName(contact != null ? contact.fullName() : null)
                             .position(m.getPosition())
+                            .crewRoleId(m.getCrewRoleId())
+                            .crewRoleDepartment(role != null ? role.getDepartment() : null)
+                            .crewRoleName(role != null ? role.getName() : null)
                             .status(formatAssignStatus(m.getStatus()))
                             .build();
                 })
+                .toList();
+
+        List<PayrollItemResponse> payrollItems = ue.getPayrollItems().stream()
+                .map(item -> PayrollItemResponse.builder().label(item.getLabel()).amount(item.getAmount()).build())
                 .toList();
 
         return AssignmentResponse.builder()
@@ -455,15 +582,22 @@ public class EventService {
                 .userId(ue.getUserId())
                 .userFullName(self != null ? self.fullName() : null)
                 .position(ue.getPosition())
+                .crewRoleId(ue.getCrewRoleId())
+                .crewRoleDepartment(ownRole != null ? ownRole.getDepartment() : null)
+                .crewRoleName(ownRole != null ? ownRole.getName() : null)
                 .status(formatAssignStatus(ue.getStatus()))
                 .note(ue.getNote())
                 .actualConcentrateAt(ue.getActualConcentrateAt())
                 .checkinAt(ue.getCheckinAt())
                 .checkoutAt(ue.getCheckoutAt())
+                .checkinLat(ue.getCheckinLat())
+                .checkinLng(ue.getCheckinLng())
                 .startTime(event.getStartTime())
                 .endTime(event.getEndTime())
                 .concentrateTime(event.getConcentrateTime())
                 .concentrateLocation(event.getConcentrateLocation())
+                .payrollItems(payrollItems)
+                .totalPayroll(ue.getSalary())
                 .teammates(teammates)
                 .build();
     }
