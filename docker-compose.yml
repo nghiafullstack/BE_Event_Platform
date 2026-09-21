@@ -1,6 +1,12 @@
+# MySQL is external (FPT / dedicated DB server) — set DB_HOST / DB_PORT in root .env.
+# Create schemas once with: infra/mysql/local-create-databases.sql
+#
+# Build jars first: mvn -q -DskipTests package
+# Then: docker compose up -d --build
+
 x-app-env: &app-env
-  DB_HOST: mysql
-  DB_PORT: "3306"
+  DB_HOST: ${DB_HOST}
+  DB_PORT: ${DB_PORT:-3306}
   DB_USERNAME: ${DB_USERNAME}
   DB_PASSWORD: ${DB_PASSWORD}
   REDIS_URL: redis://redis:6379
@@ -19,32 +25,12 @@ x-app-env: &app-env
   NOTIFICATION_SERVICE_URL: http://notification-service:8085
 
 services:
-  # mysql:
-  #   image: mysql:8.0
-  #   container_name: event-platform-mysql
-  #   restart: unless-stopped
-  #   environment:
-  #     MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-  #     MYSQL_DATABASE: identity_db
-  #     MYSQL_USER: ${DB_USERNAME}
-  #     MYSQL_PASSWORD: ${DB_PASSWORD}
-  #   ports:
-  #     - "3307:3306"   # host 3307: a native mysqld is already listening on 3306 on this Mac
-  #   volumes:
-  #     - mysql_data:/var/lib/mysql
-  #     - ./infra/mysql/init:/docker-entrypoint-initdb.d:ro
-  #   healthcheck:
-  #     test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 10
-
   redis:
     image: redis:7-alpine
     container_name: event-platform-redis
     restart: unless-stopped
     ports:
-      - "6380:6379"   # host 6380: 6379 is already taken by another project's redis on this Mac
+      - "6380:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -61,7 +47,7 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     ports:
-      - "5673:5672"    # host 5673/15673: 5672/15672 already taken by another project's rabbitmq
+      - "5673:5672"
       - "15673:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
@@ -70,10 +56,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-
-  # --- application services: only api-gateway publishes a host port ---
-  # Build the jars first (mvn -q -DskipTests package at the repo root), then
-  # `docker compose up -d --build`.
 
   identity-service:
     build: ./services/identity-service
@@ -85,8 +67,6 @@ services:
       SUPERADMIN_USERNAME: ${SUPERADMIN_USERNAME}
       SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD}
     depends_on:
-      mysql:
-        condition: service_healthy
       redis:
         condition: service_healthy
 
@@ -97,9 +77,6 @@ services:
     environment:
       <<: *app-env
       DB_NAME: catalog_db
-    depends_on:
-      mysql:
-        condition: service_healthy
 
   event-service:
     build: ./services/event-service
@@ -109,8 +86,6 @@ services:
       <<: *app-env
       DB_NAME: event_db
     depends_on:
-      mysql:
-        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -121,9 +96,6 @@ services:
     environment:
       <<: *app-env
       DB_NAME: customer_db
-    depends_on:
-      mysql:
-        condition: service_healthy
 
   notification-service:
     build: ./services/notification-service
@@ -137,8 +109,6 @@ services:
       FCM_CREDENTIALS_JSON: ${FCM_CREDENTIALS_JSON}
       FCM_TOKEN_RETENTION_DAYS: ${FCM_TOKEN_RETENTION_DAYS:-90}
     depends_on:
-      mysql:
-        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -158,6 +128,5 @@ services:
       - notification-service
 
 volumes:
-  mysql_data:
   redis_data:
   rabbitmq_data:
