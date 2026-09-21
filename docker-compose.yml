@@ -81,6 +81,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-env
+      DB_NAME: identity_db
       SUPERADMIN_USERNAME: ${SUPERADMIN_USERNAME}
       SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD}
     depends_on:
@@ -95,6 +96,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-env
+      DB_NAME: catalog_db
     depends_on:
       mysql:
         condition: service_healthy
@@ -105,6 +107,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-env
+      DB_NAME: event_db
     depends_on:
       mysql:
         condition: service_healthy
@@ -117,6 +120,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-env
+      DB_NAME: customer_db
     depends_on:
       mysql:
         condition: service_healthy
@@ -127,6 +131,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-env
+      DB_NAME: notification_db
       SMTP_USERNAME: ${SMTP_USERNAME}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       FCM_CREDENTIALS_JSON: ${FCM_CREDENTIALS_JSON}
