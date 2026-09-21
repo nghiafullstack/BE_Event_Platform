@@ -504,6 +504,17 @@ kính bị từ chối đúng khoảng cách, check-in trong bán kính thành c
    Bearer header do client tự đính kèm, không phải cookie, nên không có rủi ro CSRF của wildcard CORS).
    Cũng cần cho web admin sàn ở Phase 8 sau này.
 
+### Bug hạ tầng: `infra/mysql/init/01-init-databases.sql` grant sai user
+
+Script init chỉ chạy đúng 1 lần lúc volume MySQL còn rỗng, nên khi `.env` đổi `DB_USERNAME` từ
+`app_user` sang `avnadmin` (một thời điểm nào đó trước đây), script vẫn còn hardcode `GRANT ... TO
+'app_user'@'%'` — comment đầu file đã tự cảnh báo đúng trường hợp này ("Nếu đổi DB_USERNAME, nhớ sửa
+username literal") nhưng chưa được cập nhật. Hậu quả: MySQL container tạo được database nhưng grant
+lỗi `You are not allowed to create a user with GRANT`, khiến `identity/event/customer/catalog-service`
+crash loop lúc khởi động vì `avnadmin` không có quyền trên các schema còn lại. Phát hiện khi build lại
+Docker image để đưa các fix Phase 7 vào một môi trường local mới. Sửa: đổi literal trong file thành
+`avnadmin`, xoá volume `event-platform_mysql_data` cũ và `docker compose up -d` lại để re-init.
+
 ## Ghi chú bảo mật
 
 - Không commit `.env`. `.env.example` chỉ chứa placeholder.
