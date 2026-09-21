@@ -19,25 +19,25 @@ x-app-env: &app-env
   NOTIFICATION_SERVICE_URL: http://notification-service:8085
 
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: event-platform-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-      MYSQL_DATABASE: identity_db
-      MYSQL_USER: ${DB_USERNAME}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "3307:3306"   # host 3307: a native mysqld is already listening on 3306 on this Mac
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./infra/mysql/init:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+  # mysql:
+  #   image: mysql:8.0
+  #   container_name: event-platform-mysql
+  #   restart: unless-stopped
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+  #     MYSQL_DATABASE: identity_db
+  #     MYSQL_USER: ${DB_USERNAME}
+  #     MYSQL_PASSWORD: ${DB_PASSWORD}
+  #   ports:
+  #     - "3307:3306"   # host 3307: a native mysqld is already listening on 3306 on this Mac
+  #   volumes:
+  #     - mysql_data:/var/lib/mysql
+  #     - ./infra/mysql/init:/docker-entrypoint-initdb.d:ro
+  #   healthcheck:
+  #     test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 10
 
   redis:
     image: redis:7-alpine

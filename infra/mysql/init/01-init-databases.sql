@@ -11,9 +11,9 @@ CREATE DATABASE IF NOT EXISTS event_db CHARACTER SET utf8mb4 COLLATE utf8mb4_uni
 CREATE DATABASE IF NOT EXISTS customer_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS notification_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-GRANT ALL PRIVILEGES ON catalog_db.* TO 'app_user'@'%';
-GRANT ALL PRIVILEGES ON event_db.* TO 'app_user'@'%';
-GRANT ALL PRIVILEGES ON customer_db.* TO 'app_user'@'%';
-GRANT ALL PRIVILEGES ON notification_db.* TO 'app_user'@'%';
+GRANT ALL PRIVILEGES ON catalog_db.* TO 'avnadmin'@'%';
+GRANT ALL PRIVILEGES ON event_db.* TO 'avnadmin'@'%';
+GRANT ALL PRIVILEGES ON customer_db.* TO 'avnadmin'@'%';
+GRANT ALL PRIVILEGES ON notification_db.* TO 'avnadmin'@'%';
 
 FLUSH PRIVILEGES;
