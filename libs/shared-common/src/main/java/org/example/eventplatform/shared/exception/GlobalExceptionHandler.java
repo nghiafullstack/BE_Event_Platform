@@ -1,12 +1,18 @@
 package org.example.eventplatform.shared.exception;
 
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.ConstraintViolationException;
 import org.example.eventplatform.shared.web.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * Spring Boot's server.error.include-message property does not surface the
@@ -26,6 +32,49 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiResponse<Object>> handleApiException(ApiException ex) {
         return response(ex.getStatus(), ex.getCode(), ex.getMessage());
+    }
+
+    /**
+     * Bean Validation failures on a @Valid @RequestBody DTO (@NotBlank,
+     * @Size, @Email, ...) — without this handler Spring resolves them via
+     * its default error machinery before ResponseWrappingAdvice ever runs,
+     * so the client gets an unwrapped, message-less body and the actual
+     * reason (e.g. "password must be at least 6 characters") is only ever
+     * visible in the server log.
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Object>> handleValidation(MethodArgumentNotValidException ex) {
+        String message = ex.getBindingResult().getFieldErrors().stream()
+                .findFirst()
+                .map(FieldError::getDefaultMessage)
+                .orElse("Dữ liệu gửi lên không hợp lệ");
+        return response(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", message);
+    }
+
+    /** Same as above, for @Validated path/query params instead of a @RequestBody DTO. */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Object>> handleConstraintViolation(ConstraintViolationException ex) {
+        String message = ex.getConstraintViolations().stream()
+                .findFirst()
+                .map(v -> v.getMessage())
+                .orElse("Dữ liệu gửi lên không hợp lệ");
+        return response(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", message);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<Object>> handleMissingParameter(MissingServletRequestParameterException ex) {
+        return response(HttpStatus.BAD_REQUEST, "MISSING_PARAMETER", "Thiếu tham số bắt buộc: " + ex.getParameterName());
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Object>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return response(HttpStatus.BAD_REQUEST, "TYPE_MISMATCH", "Tham số \"" + ex.getName() + "\" không đúng định dạng");
+    }
+
+    /** Malformed JSON body, or a value that doesn't match its target type/enum. */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Object>> handleNotReadable(HttpMessageNotReadableException ex) {
+        return response(HttpStatus.BAD_REQUEST, "MALFORMED_REQUEST", "Dữ liệu gửi lên không đúng định dạng");
     }
 
     @ExceptionHandler(AccessDeniedException.class)
