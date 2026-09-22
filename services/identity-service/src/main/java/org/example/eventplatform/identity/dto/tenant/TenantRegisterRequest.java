@@ -24,8 +24,8 @@ public class TenantRegisterRequest {
     private String email;
 
     @NotBlank(message = "Mã đoàn không được để trống")
-    @Size(min = 3, max = 50, message = "Mã đoàn phải từ 3 đến 50 ký tự")
-    @Pattern(regexp = "^[a-z0-9]+(-[a-z0-9]+)*$", message = "Mã đoàn chỉ gồm chữ thường, số và dấu gạch ngang (VD: doan-lan-dai-nam)")
+    @Size(min = 3, max = 30, message = "Mã đoàn phải từ 3 đến 30 ký tự")
+    @Pattern(regexp = "^[a-z0-9]+$", message = "Mã đoàn chỉ gồm chữ thường và số, không dấu, không khoảng trắng, không gạch nối (VD: doanlandainam)")
     private String domain;
 
     @NotBlank(message = "Username cho admin không được để trống")
