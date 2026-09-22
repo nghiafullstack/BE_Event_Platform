@@ -25,6 +25,16 @@ public class Tenant extends BaseEntity {
     private String logo;
     private boolean active = true;
 
+    // Hạng mục sự kiện đăng ký với nền tảng (vd: LION_DANCE, GENERAL) — quyết định
+    // theme mặc định khi tenant chưa tự chỉnh màu riêng.
+    private String category;
+
+    @Column(name = "primary_color_hex")
+    private String primaryColorHex;
+
+    @Column(name = "accent_color_hex")
+    private String accentColorHex;
+
     @Column(name = "verification_token")
     private String verificationToken;
 

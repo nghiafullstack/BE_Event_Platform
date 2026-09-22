@@ -24,4 +24,7 @@ public class UserSummaryResponse {
     private String roleName;
     private Set<String> authorities;
     private BigDecimal commissionRate;
+    private String category;
+    private String primaryColorHex;
+    private String accentColorHex;
 }

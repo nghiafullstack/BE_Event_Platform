@@ -1,0 +1,21 @@
+package org.example.eventplatform.identity.dto.tenant;
+
+import jakarta.validation.constraints.Pattern;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+public class UpdateTenantThemeRequest {
+
+    // Gửi null để xoá override, quay lại màu mặc định theo hạng mục.
+    @Pattern(regexp = "^#[0-9A-Fa-f]{6}$", message = "Màu chính phải dạng #RRGGBB")
+    private String primaryColorHex;
+
+    @Pattern(regexp = "^#[0-9A-Fa-f]{6}$", message = "Màu nhấn phải dạng #RRGGBB")
+    private String accentColorHex;
+}

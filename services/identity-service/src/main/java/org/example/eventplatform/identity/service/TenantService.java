@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.eventplatform.identity.dto.tenant.TenantRegisterRequest;
 import org.example.eventplatform.identity.dto.tenant.TenantRegisterResponse;
 import org.example.eventplatform.identity.dto.tenant.TenantResponse;
+import org.example.eventplatform.identity.dto.tenant.UpdateTenantThemeRequest;
 import org.example.eventplatform.identity.entity.RegistrationStatus;
 import org.example.eventplatform.identity.entity.Role;
 import org.example.eventplatform.identity.entity.Tenant;
@@ -40,6 +41,7 @@ public class TenantService {
         tenant.setName(request.getName());
         tenant.setEmail(request.getEmail());
         tenant.setDomain(request.getDomain());
+        tenant.setCategory(request.getCategory());
         tenant.setActive(true);
         // No notification-service yet (Phase 5) — activate immediately instead of an email-verification flow.
         tenant.setIsVerified(true);
@@ -68,6 +70,15 @@ public class TenantService {
                 .build();
     }
 
+    @Transactional
+    public TenantResponse updateMyTheme(Long tenantId, UpdateTenantThemeRequest request) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn vị"));
+        tenant.setPrimaryColorHex(request.getPrimaryColorHex());
+        tenant.setAccentColorHex(request.getAccentColorHex());
+        return toResponse(tenant);
+    }
+
     @Transactional(readOnly = true)
     public List<TenantResponse> getAllTenants() {
         return tenantRepository.findAll().stream().map(this::toResponse).toList();
@@ -82,6 +93,9 @@ public class TenantService {
                 .active(tenant.isActive())
                 .isVerified(tenant.getIsVerified())
                 .statusConfirm(tenant.getStatusConfirm())
+                .category(tenant.getCategory())
+                .primaryColorHex(tenant.getPrimaryColorHex())
+                .accentColorHex(tenant.getAccentColorHex())
                 .build();
     }
 }

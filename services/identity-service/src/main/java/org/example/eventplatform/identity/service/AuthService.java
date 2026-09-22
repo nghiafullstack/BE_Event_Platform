@@ -135,6 +135,9 @@ public class AuthService {
                 .roleName(user.getRoles() != null ? user.getRoles().getName() : null)
                 .authorities(user.resolveAuthorities())
                 .commissionRate(user.getCommissionRate())
+                .category(user.getTenant() != null ? user.getTenant().getCategory() : null)
+                .primaryColorHex(user.getTenant() != null ? user.getTenant().getPrimaryColorHex() : null)
+                .accentColorHex(user.getTenant() != null ? user.getTenant().getAccentColorHex() : null)
                 .build();
     }
 }

@@ -5,10 +5,13 @@ import lombok.RequiredArgsConstructor;
 import org.example.eventplatform.identity.dto.tenant.TenantRegisterRequest;
 import org.example.eventplatform.identity.dto.tenant.TenantRegisterResponse;
 import org.example.eventplatform.identity.dto.tenant.TenantResponse;
+import org.example.eventplatform.identity.dto.tenant.UpdateTenantThemeRequest;
 import org.example.eventplatform.identity.service.TenantService;
+import org.example.eventplatform.shared.security.JwtPrincipal;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -30,5 +33,13 @@ public class TenantController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<List<TenantResponse>> getAll() {
         return ResponseEntity.ok(tenantService.getAllTenants());
+    }
+
+    @PatchMapping("/me/theme")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<TenantResponse> updateMyTheme(
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @Valid @RequestBody UpdateTenantThemeRequest request) {
+        return ResponseEntity.ok(tenantService.updateMyTheme(principal.tenantId(), request));
     }
 }

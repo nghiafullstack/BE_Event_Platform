@@ -20,4 +20,7 @@ public class TenantResponse {
     private boolean active;
     private Boolean isVerified;
     private RegistrationStatus statusConfirm;
+    private String category;
+    private String primaryColorHex;
+    private String accentColorHex;
 }

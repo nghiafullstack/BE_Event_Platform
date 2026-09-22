@@ -28,6 +28,10 @@ public class TenantRegisterRequest {
     @Pattern(regexp = "^[a-z0-9]+$", message = "Mã đoàn chỉ gồm chữ thường và số, không dấu, không khoảng trắng, không gạch nối (VD: doanlandainam)")
     private String domain;
 
+    @NotBlank(message = "Hạng mục sự kiện không được để trống")
+    @Pattern(regexp = "^(LION_DANCE|GENERAL)$", message = "Hạng mục sự kiện không hợp lệ")
+    private String category;
+
     @NotBlank(message = "Username cho admin không được để trống")
     private String adminUsername;
 
