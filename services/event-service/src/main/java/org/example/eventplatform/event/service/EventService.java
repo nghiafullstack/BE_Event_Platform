@@ -58,7 +58,8 @@ public class EventService {
     @Transactional
     public EventResponse createEvent(EventRequest request, JwtPrincipal principal) {
         boolean isTenantAdmin = principal != null && principal.authorities().contains("ROLE_ADMIN");
-        Long targetTenantId = isTenantAdmin ? principal.tenantId() : request.getTenantId();
+        boolean isTenantMember = principal != null && principal.authorities().contains("ROLE_TN_MEMBER");
+        Long targetTenantId = (isTenantAdmin || isTenantMember) ? principal.tenantId() : request.getTenantId();
 
         CustomerServiceClient.CustomerSummary customer = customerServiceClient.requireCustomer(request.getCustomerId());
         if (targetTenantId != null && customer.tenantId() != null && !targetTenantId.equals(customer.tenantId())) {
@@ -101,6 +102,20 @@ public class EventService {
             event.setTenantId(principal.tenantId());
             event.setPlatformFee(BigDecimal.ZERO);
             event.setCreatedBy(principal.username());
+        } else if (isTenantMember) {
+            event.setTenantId(principal.tenantId());
+            event.setPlatformFee(BigDecimal.ZERO);
+            event.setCreatedBy(principal.username());
+            event.setCreatedByUserId(principal.userId());
+            event.setStatus(EventStatus.PENDING_APPROVAL);
+
+            IdentityServiceClient.UserContact creator = identityServiceClient.findUser(principal.userId());
+            BigDecimal commissionRate = creator != null ? creator.commissionRate() : null;
+            if (commissionRate != null && request.getTotalAmount() != null) {
+                event.setCreatorCommissionAmount(
+                        request.getTotalAmount().multiply(commissionRate)
+                                .divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP));
+            }
         } else {
             event.setTenantId(request.getTenantId());
             event.setPlatformFee(calculateDefaultFee(request.getTotalAmount()));
@@ -109,7 +124,16 @@ public class EventService {
 
         Event saved = eventRepository.save(event);
 
-        if (!isTenantAdmin && saved.getTenantId() != null) {
+        if (isTenantMember) {
+            notificationPublisher.publish(
+                    "EVENT_PENDING_APPROVAL",
+                    null,
+                    saved.getTenantId(),
+                    "Có show mới chờ duyệt",
+                    "Thành viên " + principal.username() + " vừa tạo show \"" + saved.getName() + "\" — vào duyệt để kích hoạt",
+                    Map.of("eventId", String.valueOf(saved.getId()))
+            );
+        } else if (!isTenantAdmin && saved.getTenantId() != null) {
             notificationPublisher.publish(
                     "EVENT_PUSHED_TO_TENANT",
                     null,
@@ -578,6 +602,8 @@ public class EventService {
                 .checkinRadiusMeters(event.getCheckinRadiusMeters())
                 .teamFundPercent(event.getTeamFundPercent())
                 .teamFundAmount(computeTeamFundAmount(event.getTeamFundPercent(), event.getTotalAmount()))
+                .createdByUserId(event.getCreatedByUserId())
+                .creatorCommissionAmount(event.getCreatorCommissionAmount())
                 .createdAt(event.getCreatedAt())
                 .build();
 
@@ -666,6 +692,7 @@ public class EventService {
     private String formatEventStatus(EventStatus status) {
         if (status == null) return "";
         return switch (status) {
+            case PENDING_APPROVAL -> "Chờ duyệt tạo show";
             case SCHEDULED -> "Chờ duyệt";
             case CONFIRMED -> "Đã chốt show";
             case IN_PROGRESS -> "Đang diễn";

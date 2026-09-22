@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.example.eventplatform.identity.entity.AvailabilityStatus;
 
+import java.math.BigDecimal;
+
 @Getter
 @Setter
 @Builder
@@ -19,4 +21,5 @@ public class UserContactResponse {
     private String fullName;
     private String email;
     private AvailabilityStatus availabilityStatus;
+    private BigDecimal commissionRate;
 }

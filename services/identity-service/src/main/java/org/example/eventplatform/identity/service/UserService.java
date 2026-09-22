@@ -83,6 +83,14 @@ public class UserService {
         return toResponse(userRepository.save(user));
     }
 
+    @Transactional
+    public MemberResponse updateCommissionRate(Long tenantId, Long userId, java.math.BigDecimal commissionRate) {
+        User user = userRepository.findByIdAndTenantId(userId, tenantId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy thành viên với ID: " + userId));
+        user.setCommissionRate(commissionRate);
+        return toResponse(userRepository.save(user));
+    }
+
     private MemberResponse toResponse(User user) {
         return MemberResponse.builder()
                 .id(user.getId())
@@ -94,6 +102,7 @@ public class UserService {
                 .roleName(user.getRoles() != null ? user.getRoles().getName() : null)
                 .isActive(user.getIsActive())
                 .availabilityStatus(user.getAvailabilityStatus())
+                .commissionRate(user.getCommissionRate())
                 .build();
     }
 }

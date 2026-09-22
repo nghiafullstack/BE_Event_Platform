@@ -49,5 +49,7 @@ public class EventResponse {
     private Integer checkinRadiusMeters;
     private BigDecimal teamFundPercent;
     private BigDecimal teamFundAmount;
+    private Long createdByUserId;
+    private BigDecimal creatorCommissionAmount;
     private LocalDateTime createdAt;
 }

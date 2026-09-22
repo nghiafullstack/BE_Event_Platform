@@ -62,6 +62,11 @@ public class User extends BaseEntity {
     @JoinColumn(name = "role_id")
     private Role roles;
 
+    // % hoa hồng khi thành viên này tự tạo show mang khách về (không áp dụng cho
+    // show do sàn/super-admin đẩy về) — null/0 nghĩa là không có hoa hồng.
+    @Column(name = "commission_rate")
+    private java.math.BigDecimal commissionRate;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_permissions",

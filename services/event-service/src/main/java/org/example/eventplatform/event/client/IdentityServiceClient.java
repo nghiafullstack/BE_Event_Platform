@@ -94,6 +94,6 @@ public class IdentityServiceClient {
     }
 
     public record UserContact(Long userId, Long tenantId, String username, String fullName, String email,
-                               String availabilityStatus) {
+                               String availabilityStatus, java.math.BigDecimal commissionRate) {
     }
 }

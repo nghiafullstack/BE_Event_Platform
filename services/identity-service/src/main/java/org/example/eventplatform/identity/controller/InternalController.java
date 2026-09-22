@@ -80,6 +80,7 @@ public class InternalController {
                 .fullName(user.getFullName())
                 .email(user.getEmail())
                 .availabilityStatus(user.getAvailabilityStatus())
+                .commissionRate(user.getCommissionRate())
                 .build();
     }
 

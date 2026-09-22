@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.eventplatform.identity.dto.user.CreateMemberRequest;
 import org.example.eventplatform.identity.dto.user.MemberResponse;
 import org.example.eventplatform.identity.dto.user.UpdateAvailabilityRequest;
+import org.example.eventplatform.identity.dto.user.UpdateCommissionRateRequest;
 import org.example.eventplatform.identity.service.UserService;
 import org.example.eventplatform.shared.security.JwtPrincipal;
 import org.springframework.data.domain.Page;
@@ -58,5 +59,14 @@ public class UserController {
             @PathVariable Long id,
             @Valid @RequestBody UpdateAvailabilityRequest request) {
         return ResponseEntity.ok(userService.updateAvailability(principal.tenantId(), id, request.getAvailabilityStatus()));
+    }
+
+    @PatchMapping("/{id}/commission-rate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<MemberResponse> updateCommissionRate(
+            @AuthenticationPrincipal JwtPrincipal principal,
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateCommissionRateRequest request) {
+        return ResponseEntity.ok(userService.updateCommissionRate(principal.tenantId(), id, request.getCommissionRate()));
     }
 }

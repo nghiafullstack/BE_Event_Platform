@@ -84,6 +84,15 @@ public class Event extends BaseEntity {
     @Column(name = "team_fund_percent")
     private BigDecimal teamFundPercent;
 
+    // Set only when a TN_MEMBER self-creates the show (not the tenant admin,
+    // not a platform push) — distinct from the display-only `createdBy`
+    // username string, needed as a real FK to look up/pay the commission.
+    @Column(name = "created_by_user_id")
+    private Long createdByUserId;
+
+    @Column(name = "creator_commission_amount")
+    private BigDecimal creatorCommissionAmount;
+
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<UserEvent> assignedMembers = new ArrayList<>();
