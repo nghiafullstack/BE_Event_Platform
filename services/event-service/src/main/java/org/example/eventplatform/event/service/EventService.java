@@ -312,14 +312,31 @@ public class EventService {
         userEventRepository.save(ue);
 
         LocalTime scheduledTime = ue.getEvent().getConcentrateTime();
+        String punctuality;
+        String result;
         if (scheduledTime == null) {
-            return "Xác nhận có mặt thành công lúc " + now.format(HOUR_MINUTE);
+            punctuality = "không có giờ quy định";
+            result = "Xác nhận có mặt thành công lúc " + now.format(HOUR_MINUTE);
+        } else if (!now.isAfter(scheduledTime)) {
+            punctuality = "đúng giờ";
+            result = "Xác nhận: có mặt ĐÚNG GIỜ (" + now.format(HOUR_MINUTE) + ").";
+        } else {
+            long minutesLate = java.time.Duration.between(scheduledTime, now).toMinutes();
+            punctuality = "trễ " + minutesLate + " phút";
+            result = "Xác nhận: có mặt MUỘN " + minutesLate + " phút (giờ quy định " + scheduledTime.format(HOUR_MINUTE) + ").";
         }
-        if (!now.isAfter(scheduledTime)) {
-            return "Xác nhận: có mặt ĐÚNG GIỜ (" + now.format(HOUR_MINUTE) + ").";
-        }
-        long minutesLate = java.time.Duration.between(scheduledTime, now).toMinutes();
-        return "Xác nhận: có mặt MUỘN " + minutesLate + " phút (giờ quy định " + scheduledTime.format(HOUR_MINUTE) + ").";
+
+        notificationPublisher.publish(
+                "MEMBER_CONCENTRATE_CHECKIN",
+                null,
+                ue.getEvent().getTenantId(),
+                "Thành viên đã tập trung",
+                "User #" + ue.getUserId() + " đã check-in tập trung lúc " + now.format(HOUR_MINUTE)
+                        + " cho show \"" + ue.getEvent().getName() + "\" — " + punctuality + ".",
+                Map.of("userEventId", String.valueOf(userEventId), "eventId", String.valueOf(ue.getEvent().getId()), "punctuality", punctuality)
+        );
+
+        return result;
     }
 
     @Transactional
