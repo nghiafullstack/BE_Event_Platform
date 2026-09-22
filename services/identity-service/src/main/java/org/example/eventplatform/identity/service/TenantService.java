@@ -32,11 +32,8 @@ public class TenantService {
         if (tenantRepository.existsByEmail(request.getEmail())) {
             throw new RuntimeException("Email đã tồn tại trên hệ thống");
         }
-        if (request.getDomain() != null && tenantRepository.existsByDomain(request.getDomain())) {
-            throw new RuntimeException("Domain này đã được sử dụng");
-        }
-        if (userRepository.existsByUsername(request.getAdminUsername())) {
-            throw new RuntimeException("Username admin đã tồn tại");
+        if (tenantRepository.existsByDomain(request.getDomain())) {
+            throw new RuntimeException("Mã đoàn này đã được sử dụng");
         }
 
         Tenant tenant = new Tenant();

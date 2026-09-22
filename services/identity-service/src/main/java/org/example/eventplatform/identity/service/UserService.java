@@ -47,8 +47,8 @@ public class UserService {
 
     @Transactional
     public MemberResponse createTenantMember(Long tenantId, CreateMemberRequest request) {
-        if (userRepository.existsByUsername(request.getUsername())) {
-            throw new IllegalStateException("Username đã tồn tại");
+        if (userRepository.existsByTenantIdAndUsername(tenantId, request.getUsername())) {
+            throw new IllegalStateException("Username đã tồn tại trong đoàn của bạn");
         }
 
         String roleName = request.getRoleName() != null ? request.getRoleName() : DEFAULT_MEMBER_ROLE;

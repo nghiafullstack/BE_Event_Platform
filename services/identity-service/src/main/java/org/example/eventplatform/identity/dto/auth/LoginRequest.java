@@ -17,4 +17,7 @@ public class LoginRequest {
 
     @NotBlank(message = "Mật khẩu không được để trống")
     private String password;
+
+    // Mã đoàn (Tenant.domain). Để trống = đăng nhập tài khoản Super Admin (không thuộc tenant nào).
+    private String tenantDomain;
 }

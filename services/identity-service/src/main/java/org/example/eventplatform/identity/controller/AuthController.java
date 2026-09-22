@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.eventplatform.identity.dto.auth.AuthTokenResponse;
 import org.example.eventplatform.identity.dto.auth.LoginRequest;
 import org.example.eventplatform.identity.dto.auth.RefreshTokenRequest;
+import org.example.eventplatform.identity.dto.auth.TenantLookupResponse;
 import org.example.eventplatform.identity.dto.auth.UserSummaryResponse;
 import org.example.eventplatform.identity.service.AuthService;
 import org.example.eventplatform.shared.security.JwtPrincipal;
@@ -22,6 +23,11 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthTokenResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @GetMapping("/tenant-lookup")
+    public ResponseEntity<TenantLookupResponse> lookupTenant(@RequestParam String domain) {
+        return ResponseEntity.ok(authService.lookupTenant(domain));
     }
 
     @PostMapping("/refresh")

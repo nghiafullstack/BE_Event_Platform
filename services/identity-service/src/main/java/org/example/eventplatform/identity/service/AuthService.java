@@ -3,8 +3,11 @@ package org.example.eventplatform.identity.service;
 import lombok.RequiredArgsConstructor;
 import org.example.eventplatform.identity.dto.auth.AuthTokenResponse;
 import org.example.eventplatform.identity.dto.auth.LoginRequest;
+import org.example.eventplatform.identity.dto.auth.TenantLookupResponse;
 import org.example.eventplatform.identity.dto.auth.UserSummaryResponse;
+import org.example.eventplatform.identity.entity.Tenant;
 import org.example.eventplatform.identity.entity.User;
+import org.example.eventplatform.identity.repository.TenantRepository;
 import org.example.eventplatform.identity.repository.UserRepository;
 import org.example.eventplatform.shared.security.JwtPrincipal;
 import org.example.eventplatform.shared.security.JwtTokenProvider;
@@ -13,19 +16,29 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final TenantRepository tenantRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
 
     @Transactional(readOnly = true)
     public AuthTokenResponse login(LoginRequest request) {
-        User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new RuntimeException("Tài khoản hoặc mật khẩu không chính xác"));
+        String domain = request.getTenantDomain() != null ? request.getTenantDomain().trim() : "";
+        User user;
+        if (!domain.isEmpty()) {
+            Tenant tenant = tenantRepository.findByDomain(domain)
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy đoàn với mã này"));
+            user = userRepository.findByTenantIdAndUsername(tenant.getId(), request.getUsername())
+                    .orElseThrow(() -> new RuntimeException("Tài khoản hoặc mật khẩu không chính xác"));
+        } else {
+            user = resolveUserWithoutDomain(request.getUsername());
+        }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new RuntimeException("Tài khoản hoặc mật khẩu không chính xác");
@@ -38,6 +51,39 @@ public class AuthService {
         }
 
         return issueTokens(user);
+    }
+
+    /**
+     * Nhánh bỏ trống mã đoàn. Ưu tiên tài khoản Super Admin (tenant = null); nếu không có,
+     * rơi về tra cứu username toàn hệ thống để các bản app cũ (chưa cập nhật gửi tenant_domain)
+     * vẫn đăng nhập được — chỉ chấp nhận khi username đó chỉ khớp đúng 1 user duy nhất.
+     * TODO: gỡ nhánh tương thích ngược này sau khi toàn bộ client đã cập nhật gửi tenant_domain.
+     */
+    private User resolveUserWithoutDomain(String username) {
+        List<User> matches = userRepository.findAllByUsername(username);
+        Optional<User> superAdmin = matches.stream().filter(u -> u.getTenant() == null).findFirst();
+        if (superAdmin.isPresent()) {
+            return superAdmin.get();
+        }
+        if (matches.size() == 1) {
+            return matches.get(0);
+        }
+        if (matches.size() > 1) {
+            throw new RuntimeException("Có nhiều đoàn cùng dùng tài khoản này, vui lòng nhập mã đoàn để đăng nhập");
+        }
+        throw new RuntimeException("Tài khoản hoặc mật khẩu không chính xác");
+    }
+
+    @Transactional(readOnly = true)
+    public TenantLookupResponse lookupTenant(String domain) {
+        Tenant tenant = tenantRepository.findByDomain(domain.trim())
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đoàn với mã này"));
+        return TenantLookupResponse.builder()
+                .id(tenant.getId())
+                .name(tenant.getName())
+                .logo(tenant.getLogo())
+                .active(tenant.isActive())
+                .build();
     }
 
     @Transactional(readOnly = true)

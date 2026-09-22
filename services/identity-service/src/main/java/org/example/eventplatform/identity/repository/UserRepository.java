@@ -20,7 +20,23 @@ public interface UserRepository extends JpaRepository<User, Long> {
             "WHERE u.username = :username")
     Optional<User> findByUsername(@Param("username") String username);
 
+    // Dùng cho nhánh tương thích ngược (bản app cũ đăng nhập không gửi tenant_domain) —
+    // trả List thay vì Optional vì username không còn đảm bảo duy nhất toàn hệ thống.
+    @Query("SELECT u FROM User u " +
+            "LEFT JOIN FETCH u.roles r " +
+            "LEFT JOIN FETCH r.permissions " +
+            "WHERE u.username = :username")
+    List<User> findAllByUsername(@Param("username") String username);
+
     boolean existsByUsername(String username);
+
+    @Query("SELECT u FROM User u " +
+            "LEFT JOIN FETCH u.roles r " +
+            "LEFT JOIN FETCH r.permissions " +
+            "WHERE u.tenant.id = :tenantId AND u.username = :username")
+    Optional<User> findByTenantIdAndUsername(@Param("tenantId") Long tenantId, @Param("username") String username);
+
+    boolean existsByTenantIdAndUsername(Long tenantId, String username);
 
     Page<User> findByTenantId(Long tenantId, Pageable pageable);
 

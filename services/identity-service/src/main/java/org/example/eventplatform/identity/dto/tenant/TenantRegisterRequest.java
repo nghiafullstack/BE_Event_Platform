@@ -2,6 +2,7 @@ package org.example.eventplatform.identity.dto.tenant;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -22,6 +23,9 @@ public class TenantRegisterRequest {
     @Email(message = "Email không đúng định dạng")
     private String email;
 
+    @NotBlank(message = "Mã đoàn không được để trống")
+    @Size(min = 3, max = 50, message = "Mã đoàn phải từ 3 đến 50 ký tự")
+    @Pattern(regexp = "^[a-z0-9]+(-[a-z0-9]+)*$", message = "Mã đoàn chỉ gồm chữ thường, số và dấu gạch ngang (VD: doan-lan-dai-nam)")
     private String domain;
 
     @NotBlank(message = "Username cho admin không được để trống")
