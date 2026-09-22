@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.util.Set;
 
 @Getter
@@ -22,4 +23,5 @@ public class UserSummaryResponse {
     private String tenantName;
     private String roleName;
     private Set<String> authorities;
+    private BigDecimal commissionRate;
 }

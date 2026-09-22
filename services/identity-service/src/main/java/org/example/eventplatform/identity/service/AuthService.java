@@ -88,6 +88,7 @@ public class AuthService {
                 .tenantName(user.getTenant() != null ? user.getTenant().getName() : null)
                 .roleName(user.getRoles() != null ? user.getRoles().getName() : null)
                 .authorities(user.resolveAuthorities())
+                .commissionRate(user.getCommissionRate())
                 .build();
     }
 }
