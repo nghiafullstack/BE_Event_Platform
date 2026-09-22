@@ -93,6 +93,7 @@ public class EventService {
                 .venueLat(request.getVenueLat())
                 .venueLng(request.getVenueLng())
                 .checkinRadiusMeters(request.getCheckinRadiusMeters())
+                .teamFundPercent(request.getTeamFundPercent())
                 .status(EventStatus.SCHEDULED)
                 .build();
 
@@ -132,6 +133,13 @@ public class EventService {
         }
         return depositAmount.divide(totalAmount, 4, java.math.RoundingMode.HALF_UP)
                 .multiply(new BigDecimal("100"));
+    }
+
+    private BigDecimal computeTeamFundAmount(BigDecimal teamFundPercent, BigDecimal totalAmount) {
+        if (teamFundPercent == null || totalAmount == null) {
+            return null;
+        }
+        return totalAmount.multiply(teamFundPercent).divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP);
     }
 
     @Transactional(readOnly = true)
@@ -568,6 +576,8 @@ public class EventService {
                 .venueLat(event.getVenueLat())
                 .venueLng(event.getVenueLng())
                 .checkinRadiusMeters(event.getCheckinRadiusMeters())
+                .teamFundPercent(event.getTeamFundPercent())
+                .teamFundAmount(computeTeamFundAmount(event.getTeamFundPercent(), event.getTotalAmount()))
                 .createdAt(event.getCreatedAt())
                 .build();
 

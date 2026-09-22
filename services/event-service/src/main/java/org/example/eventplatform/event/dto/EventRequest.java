@@ -61,4 +61,8 @@ public class EventRequest {
     private Double venueLat;
     private Double venueLng;
     private Integer checkinRadiusMeters;
+
+    // % giữ lại làm quỹ đội chung trước khi chia cát-xê từng thành viên — để trống nếu không trích quỹ.
+    @DecimalMin(value = "0.0")
+    private BigDecimal teamFundPercent;
 }

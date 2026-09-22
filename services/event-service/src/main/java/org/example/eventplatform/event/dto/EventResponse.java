@@ -47,5 +47,7 @@ public class EventResponse {
     private Double venueLat;
     private Double venueLng;
     private Integer checkinRadiusMeters;
+    private BigDecimal teamFundPercent;
+    private BigDecimal teamFundAmount;
     private LocalDateTime createdAt;
 }

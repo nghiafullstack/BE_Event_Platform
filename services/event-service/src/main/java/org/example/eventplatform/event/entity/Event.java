@@ -79,6 +79,11 @@ public class Event extends BaseEntity {
     @Column(name = "checkin_radius_meters")
     private Integer checkinRadiusMeters;
 
+    // % of totalAmount the tenant keeps as a shared team fund before splitting
+    // the rest into per-member payroll_items — null/0 means no fund is kept.
+    @Column(name = "team_fund_percent")
+    private BigDecimal teamFundPercent;
+
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<UserEvent> assignedMembers = new ArrayList<>();
