@@ -14,10 +14,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/** GET is open to any tenant member (needed to pick a package when self-creating a show); writes stay ADMIN-only. */
 @RestController
 @RequestMapping("/api/tenant/show-packages")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
 public class ShowPackageController {
 
     private final ShowPackageService showPackageService;
@@ -28,6 +28,7 @@ public class ShowPackageController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ShowPackageResponse> create(
             @AuthenticationPrincipal JwtPrincipal principal,
             @Valid @RequestBody ShowPackageRequest request) {
@@ -35,6 +36,7 @@ public class ShowPackageController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ShowPackageResponse> update(
             @AuthenticationPrincipal JwtPrincipal principal,
             @PathVariable Long id,
@@ -43,6 +45,7 @@ public class ShowPackageController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(@AuthenticationPrincipal JwtPrincipal principal, @PathVariable Long id) {
         showPackageService.delete(principal.tenantId(), id);
         return ResponseEntity.noContent().build();

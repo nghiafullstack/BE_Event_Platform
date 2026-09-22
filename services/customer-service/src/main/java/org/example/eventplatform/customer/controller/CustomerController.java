@@ -15,10 +15,15 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * Read + create are open to any authenticated tenant member (a TN_MEMBER
+ * self-booking a show needs to search for and add customers); update/delete
+ * stay ADMIN-only. Every method still scopes by principal.tenantId(), so a
+ * member never sees or touches another tenant's customers regardless.
+ */
 @RestController
 @RequestMapping("/api/customers")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
 public class CustomerController {
 
     private final CustomerService customerService;
@@ -45,6 +50,7 @@ public class CustomerController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<CustomerResponse> update(
             @AuthenticationPrincipal JwtPrincipal principal,
             @PathVariable Long id,
@@ -53,6 +59,7 @@ public class CustomerController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(@AuthenticationPrincipal JwtPrincipal principal, @PathVariable Long id) {
         customerService.deleteCustomer(id, principal.tenantId());
         return ResponseEntity.noContent().build();
