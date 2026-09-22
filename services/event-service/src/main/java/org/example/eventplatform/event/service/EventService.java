@@ -106,7 +106,20 @@ public class EventService {
             event.setCreatedBy(principal != null ? principal.username() : "GUEST");
         }
 
-        return toResponse(eventRepository.save(event));
+        Event saved = eventRepository.save(event);
+
+        if (!isTenantAdmin && saved.getTenantId() != null) {
+            notificationPublisher.publish(
+                    "EVENT_PUSHED_TO_TENANT",
+                    null,
+                    saved.getTenantId(),
+                    "Sàn vừa đẩy show mới về đơn vị bạn",
+                    "Show \"" + saved.getName() + "\" đã được giao cho đơn vị bạn — vào xem và xác nhận",
+                    Map.of("eventId", String.valueOf(saved.getId()))
+            );
+        }
+
+        return toResponse(saved);
     }
 
     private BigDecimal calculateDefaultFee(BigDecimal totalAmount) {
@@ -339,6 +352,15 @@ public class EventService {
             event.setStatus(EventStatus.IN_PROGRESS);
             eventRepository.save(event);
         }
+
+        notificationPublisher.publish(
+                "MEMBER_CHECKED_IN",
+                null,
+                event.getTenantId(),
+                "Thành viên đã check-in",
+                "User #" + ue.getUserId() + " đã check-in tại show \"" + event.getName() + "\"",
+                Map.of("userEventId", String.valueOf(userEventId), "eventId", String.valueOf(event.getId()))
+        );
     }
 
     @Transactional
@@ -355,6 +377,16 @@ public class EventService {
         userEventRepository.save(ue);
 
         autoCompleteEventIfFinished(ue.getEvent().getId());
+
+        notificationPublisher.publish(
+                "MEMBER_CHECKED_OUT",
+                null,
+                ue.getEvent().getTenantId(),
+                "Thành viên đã check-out",
+                "User #" + ue.getUserId() + " đã hoàn thành show \"" + ue.getEvent().getName() + "\"",
+                Map.of("userEventId", String.valueOf(userEventId), "eventId", String.valueOf(ue.getEvent().getId()))
+        );
+
         return "Đã hoàn thành show diễn!";
     }
 
