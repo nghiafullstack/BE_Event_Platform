@@ -39,6 +39,7 @@ public class GatewayProxyFilter implements WebFilter, Ordered {
     private static final List<PublicRoute> PUBLIC_ROUTES = List.of(
             new PublicRoute(HttpMethod.POST, "/api/auth/login"),
             new PublicRoute(HttpMethod.POST, "/api/auth/refresh"),
+            new PublicRoute(HttpMethod.GET, "/api/auth/tenant-lookup"),
             new PublicRoute(HttpMethod.POST, "/api/tenants/register"),
             new PublicRoute(HttpMethod.POST, "/api/events"),
             new PublicRoute(HttpMethod.GET, "/api/service-categories"),
