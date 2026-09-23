@@ -21,6 +21,7 @@ public class TenantResponse {
     private Boolean isVerified;
     private RegistrationStatus statusConfirm;
     private String category;
+    private String province;
     private String primaryColorHex;
     private String accentColorHex;
 }

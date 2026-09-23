@@ -76,6 +76,9 @@ public class TenantService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn vị"));
         tenant.setPrimaryColorHex(request.getPrimaryColorHex());
         tenant.setAccentColorHex(request.getAccentColorHex());
+        if (request.getProvince() != null) {
+            tenant.setProvince(request.getProvince().trim());
+        }
         return toResponse(tenant);
     }
 
@@ -94,6 +97,7 @@ public class TenantService {
                 .isVerified(tenant.getIsVerified())
                 .statusConfirm(tenant.getStatusConfirm())
                 .category(tenant.getCategory())
+                .province(tenant.getProvince())
                 .primaryColorHex(tenant.getPrimaryColorHex())
                 .accentColorHex(tenant.getAccentColorHex())
                 .build();

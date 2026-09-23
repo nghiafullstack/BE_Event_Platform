@@ -7,6 +7,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+import java.util.Arrays;
+import java.util.List;
+
 @Component
 @Slf4j
 public class CatalogServiceClient {
@@ -37,6 +40,23 @@ public class CatalogServiceClient {
             log.error("Could not fetch vendor profile for tenant {}", tenantId, ex);
             return null;
         }
+    }
+
+    /** Danh mục dịch vụ cho trang chủ sàn. Lỗi thì trả rỗng để home không vỡ. */
+    public List<ServiceCategorySummary> listServiceCategories() {
+        try {
+            ServiceCategorySummary[] response = restClient.get()
+                    .uri("/api/internal/service-categories")
+                    .retrieve()
+                    .body(ServiceCategorySummary[].class);
+            return response == null ? List.of() : Arrays.asList(response);
+        } catch (Exception ex) {
+            log.error("Could not fetch service categories", ex);
+            return List.of();
+        }
+    }
+
+    public record ServiceCategorySummary(Long id, String code, String name, String description) {
     }
 
     public record VendorProfileSummary(

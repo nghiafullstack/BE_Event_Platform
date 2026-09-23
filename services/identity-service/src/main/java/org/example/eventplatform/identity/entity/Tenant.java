@@ -29,6 +29,9 @@ public class Tenant extends BaseEntity {
     // theme mặc định khi tenant chưa tự chỉnh màu riêng.
     private String category;
 
+    // Tỉnh/thành đơn vị hoạt động — dùng cho phần "khám phá khu vực" trên sàn khách.
+    private String province;
+
     @Column(name = "primary_color_hex")
     private String primaryColorHex;
 

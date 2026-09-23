@@ -18,4 +18,7 @@ public class UpdateTenantThemeRequest {
 
     @Pattern(regexp = "^#[0-9A-Fa-f]{6}$", message = "Màu nhấn phải dạng #RRGGBB")
     private String accentColorHex;
+
+    // Tỉnh/thành đơn vị hoạt động, hiện trong phần khám phá khu vực của khách.
+    private String province;
 }

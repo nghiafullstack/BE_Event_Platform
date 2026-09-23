@@ -1,6 +1,7 @@
 package org.example.eventplatform.event.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.example.eventplatform.event.dto.HomeAppResponse;
 import org.example.eventplatform.event.dto.PublicPackageResponse;
 import org.example.eventplatform.event.dto.PublicTroupeResponse;
 import org.example.eventplatform.event.service.PublicCatalogService;
@@ -8,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -20,9 +22,17 @@ public class PublicCatalogController {
 
     private final PublicCatalogService publicCatalogService;
 
+    /** Gộp dữ liệu trang chủ vào một lần gọi. */
+    @GetMapping("/home_app")
+    public ResponseEntity<HomeAppResponse> getHomeApp() {
+        return ResponseEntity.ok(publicCatalogService.getHomeApp());
+    }
+
     @GetMapping("/troupes")
-    public ResponseEntity<List<PublicTroupeResponse>> listTroupes() {
-        return ResponseEntity.ok(publicCatalogService.listTroupes());
+    public ResponseEntity<List<PublicTroupeResponse>> listTroupes(
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String province) {
+        return ResponseEntity.ok(publicCatalogService.listTroupes(category, province));
     }
 
     @GetMapping("/troupes/{id}")

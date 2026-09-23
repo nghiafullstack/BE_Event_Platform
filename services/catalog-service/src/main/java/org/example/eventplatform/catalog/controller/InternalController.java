@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /**
  * Service-to-service only — guarded by {@code X-Internal-Token}.
  */
@@ -23,6 +25,18 @@ public class InternalController {
 
     private final VendorProfileRepository vendorProfileRepository;
     private final ServiceCategoryRepository serviceCategoryRepository;
+
+    /** Danh mục dịch vụ đang mở — event-service dùng để dựng trang chủ sàn khách. */
+    @GetMapping("/service-categories")
+    public ResponseEntity<List<ServiceCategorySummary>> getActiveCategories() {
+        List<ServiceCategorySummary> categories = serviceCategoryRepository.findByActiveTrue().stream()
+                .map(c -> new ServiceCategorySummary(c.getId(), c.getCode(), c.getName(), c.getDescription()))
+                .toList();
+        return ResponseEntity.ok(categories);
+    }
+
+    public record ServiceCategorySummary(Long id, String code, String name, String description) {
+    }
 
     @GetMapping("/vendor-profiles/by-tenant/{tenantId}")
     public ResponseEntity<VendorProfileSummaryResponse> getByTenant(@PathVariable Long tenantId) {

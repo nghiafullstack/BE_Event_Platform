@@ -57,6 +57,7 @@ public class InternalController {
                 .domain(tenant.getDomain())
                 .logo(tenant.getLogo())
                 .category(tenant.getCategory())
+                .province(tenant.getProvince())
                 .primaryColorHex(tenant.getPrimaryColorHex())
                 .accentColorHex(tenant.getAccentColorHex())
                 .build();

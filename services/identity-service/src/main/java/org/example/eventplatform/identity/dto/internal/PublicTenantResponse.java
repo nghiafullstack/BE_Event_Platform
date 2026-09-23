@@ -13,6 +13,7 @@ public record PublicTenantResponse(
         String domain,
         String logo,
         String category,
+        String province,
         String primaryColorHex,
         String accentColorHex
 ) {

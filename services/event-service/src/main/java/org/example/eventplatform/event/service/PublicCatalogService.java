@@ -1,7 +1,9 @@
 package org.example.eventplatform.event.service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.eventplatform.event.client.CatalogServiceClient;
 import org.example.eventplatform.event.client.IdentityServiceClient;
+import org.example.eventplatform.event.dto.HomeAppResponse;
 import org.example.eventplatform.event.dto.PublicPackageResponse;
 import org.example.eventplatform.event.dto.PublicTroupeResponse;
 import org.example.eventplatform.event.entity.ShowPackage;
@@ -11,8 +13,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -25,13 +29,18 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PublicCatalogService {
 
+    private static final int FEATURED_LIMIT = 10;
+
     private final ShowPackageRepository showPackageRepository;
     private final IdentityServiceClient identityServiceClient;
+    private final CatalogServiceClient catalogServiceClient;
 
     @Transactional(readOnly = true)
-    public List<PublicTroupeResponse> listTroupes() {
+    public List<PublicTroupeResponse> listTroupes(String category, String province) {
         Map<Long, List<ShowPackage>> packagesByTenant = activePackagesByTenant();
         return identityServiceClient.findPublicTenants().stream()
+                .filter(t -> category == null || category.isBlank() || category.equalsIgnoreCase(t.category()))
+                .filter(t -> province == null || province.isBlank() || province.equalsIgnoreCase(t.province()))
                 .map(tenant -> toTroupe(tenant, packagesByTenant.getOrDefault(tenant.id(), List.of()), false))
                 .toList();
     }
@@ -50,13 +59,74 @@ public class PublicCatalogService {
 
     @Transactional(readOnly = true)
     public List<PublicPackageResponse> listPackages() {
-        Map<Long, IdentityServiceClient.PublicTenant> tenants = identityServiceClient.findPublicTenants().stream()
-                .collect(Collectors.toMap(IdentityServiceClient.PublicTenant::id, t -> t, (a, b) -> a));
+        Map<Long, IdentityServiceClient.PublicTenant> tenants = publicTenantsById();
         // Bỏ gói của đoàn đã ngừng hoạt động — findPublicTenants chỉ trả đoàn đang hoạt động.
         return showPackageRepository.findByActiveTrue().stream()
                 .filter(pkg -> tenants.containsKey(pkg.getTenantId()))
                 .map(pkg -> toPackage(pkg, tenants.get(pkg.getTenantId())))
                 .toList();
+    }
+
+    /** Gộp mọi thứ trang chủ cần vào một lần gọi. */
+    @Transactional(readOnly = true)
+    public HomeAppResponse getHomeApp() {
+        List<IdentityServiceClient.PublicTenant> tenants = identityServiceClient.findPublicTenants();
+        Map<Long, List<ShowPackage>> packagesByTenant = activePackagesByTenant();
+
+        Map<String, Long> troupesPerCategory = tenants.stream()
+                .filter(t -> t.category() != null)
+                .collect(Collectors.groupingBy(IdentityServiceClient.PublicTenant::category, Collectors.counting()));
+
+        List<HomeAppResponse.CategoryBrief> categories = catalogServiceClient.listServiceCategories().stream()
+                .map(c -> HomeAppResponse.CategoryBrief.builder()
+                        .id(c.id())
+                        .code(c.code())
+                        .name(c.name())
+                        .description(c.description())
+                        .troupeCount(troupesPerCategory.getOrDefault(c.code(), 0L).intValue())
+                        .build())
+                .toList();
+
+        // LinkedHashMap để thứ tự khu vực ổn định giữa các lần gọi.
+        Map<String, Integer> troupesPerProvince = new LinkedHashMap<>();
+        tenants.stream()
+                .map(IdentityServiceClient.PublicTenant::province)
+                .filter(p -> p != null && !p.isBlank())
+                .sorted()
+                .forEach(p -> troupesPerProvince.merge(p, 1, Integer::sum));
+
+        List<HomeAppResponse.ProvinceBrief> discovers = troupesPerProvince.entrySet().stream()
+                .map(e -> HomeAppResponse.ProvinceBrief.builder()
+                        .province(e.getKey())
+                        .troupeCount(e.getValue())
+                        .build())
+                .toList();
+
+        List<PublicTroupeResponse> featuredTroupes = tenants.stream()
+                .map(t -> toTroupe(t, packagesByTenant.getOrDefault(t.id(), List.of()), false))
+                .sorted(Comparator.comparingInt(PublicTroupeResponse::packageCount).reversed())
+                .limit(FEATURED_LIMIT)
+                .toList();
+
+        Map<Long, IdentityServiceClient.PublicTenant> tenantsById = tenants.stream()
+                .collect(Collectors.toMap(IdentityServiceClient.PublicTenant::id, t -> t, (a, b) -> a));
+        List<PublicPackageResponse> featuredPackages = showPackageRepository.findByActiveTrue().stream()
+                .filter(pkg -> tenantsById.containsKey(pkg.getTenantId()))
+                .map(pkg -> toPackage(pkg, tenantsById.get(pkg.getTenantId())))
+                .limit(FEATURED_LIMIT)
+                .toList();
+
+        return HomeAppResponse.builder()
+                .categories(categories)
+                .discovers(discovers)
+                .featuredTroupes(featuredTroupes)
+                .featuredPackages(featuredPackages)
+                .build();
+    }
+
+    private Map<Long, IdentityServiceClient.PublicTenant> publicTenantsById() {
+        return identityServiceClient.findPublicTenants().stream()
+                .collect(Collectors.toMap(IdentityServiceClient.PublicTenant::id, t -> t, (a, b) -> a));
     }
 
     private Map<Long, List<ShowPackage>> activePackagesByTenant() {
@@ -69,7 +139,7 @@ public class PublicCatalogService {
                                           boolean includePackages) {
         BigDecimal fromPrice = packages.stream()
                 .map(ShowPackage::getPrice)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .min(Comparator.naturalOrder())
                 .orElse(null);
         return PublicTroupeResponse.builder()
@@ -78,6 +148,7 @@ public class PublicCatalogService {
                 .domain(tenant.domain())
                 .logo(tenant.logo())
                 .category(tenant.category())
+                .province(tenant.province())
                 .primaryColorHex(tenant.primaryColorHex())
                 .accentColorHex(tenant.accentColorHex())
                 .packageCount(packages.size())
