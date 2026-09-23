@@ -122,7 +122,7 @@ public class GatewayProxyFilter implements WebFilter, Ordered {
                     return exchange.getResponse().writeWith(clientResponse.bodyToFlux(DataBuffer.class));
                 })
                 .onErrorResume(ex -> {
-                    log.error("Proxy error forwarding {} to {}", request.getPath(), targetUrl, ex);
+                    log.error("Proxy error forwarding {} to {}", request.getPath(), targetUri, ex);
                     return respond(exchange, HttpStatus.BAD_GATEWAY, "BAD_GATEWAY", "Không gọi được service phía sau");
                 });
     }
