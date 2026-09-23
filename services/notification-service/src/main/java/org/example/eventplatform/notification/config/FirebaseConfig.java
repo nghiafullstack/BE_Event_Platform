@@ -11,13 +11,16 @@ import org.springframework.util.StringUtils;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Optional;
 
 /**
- * FCM_CREDENTIALS_JSON is a placeholder until there is a real Firebase
- * project + a real device token (Phase 7). Without valid credentials this
- * bean is simply absent — FcmPushService falls back to logging instead of
- * calling Firebase, so the rest of the pipeline stays testable now.
+ * Khi FCM_CREDENTIALS_JSON chưa được cấu hình, bean này trả null — Spring ghi
+ * nhận là NullBean nên chỗ inject {@code Optional<FirebaseApp>} nhận được
+ * Optional.empty(), và FcmPushService chỉ ghi log thay vì gọi Firebase.
+ *
+ * Bean phải trả thẳng FirebaseApp chứ không phải Optional&lt;FirebaseApp&gt;:
+ * Spring coi tham số kiểu Optional&lt;T&gt; là "dependency tuỳ chọn kiểu T" nên
+ * nó đi tìm bean kiểu FirebaseApp — một bean mang kiểu Optional sẽ không bao
+ * giờ khớp, và FcmPushService luôn nhận Optional.empty() dù credentials đúng.
  */
 @Configuration
 @Slf4j
@@ -27,23 +30,25 @@ public class FirebaseConfig {
     private String credentialsJson;
 
     @Bean
-    public Optional<FirebaseApp> firebaseApp() {
+    public FirebaseApp firebaseApp() {
         if (!StringUtils.hasText(credentialsJson) || credentialsJson.startsWith("changeme")) {
             log.warn("FCM_CREDENTIALS_JSON not set (or still the placeholder) — FCM push will only be logged, not actually sent");
-            return Optional.empty();
+            return null;
         }
 
         try {
             if (!FirebaseApp.getApps().isEmpty()) {
-                return Optional.of(FirebaseApp.getInstance());
+                return FirebaseApp.getInstance();
             }
             GoogleCredentials credentials = GoogleCredentials.fromStream(
                     new ByteArrayInputStream(credentialsJson.getBytes(StandardCharsets.UTF_8)));
             FirebaseOptions options = FirebaseOptions.builder().setCredentials(credentials).build();
-            return Optional.of(FirebaseApp.initializeApp(options));
+            FirebaseApp app = FirebaseApp.initializeApp(options);
+            log.info("Firebase đã khởi tạo — FCM push sẽ được gửi thật");
+            return app;
         } catch (Exception ex) {
             log.error("Failed to initialize Firebase — FCM push will only be logged", ex);
-            return Optional.empty();
+            return null;
         }
     }
 }
