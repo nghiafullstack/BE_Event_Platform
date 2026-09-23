@@ -40,6 +40,8 @@ public class GatewayProxyFilter implements WebFilter, Ordered {
             new PublicRoute(HttpMethod.POST, "/api/auth/login"),
             new PublicRoute(HttpMethod.POST, "/api/auth/refresh"),
             new PublicRoute(HttpMethod.GET, "/api/auth/tenant-lookup"),
+            new PublicRoute(HttpMethod.POST, "/api/auth/customer/register"),
+            new PublicRoute(HttpMethod.GET, "/api/public/**"),
             new PublicRoute(HttpMethod.POST, "/api/tenants/register"),
             new PublicRoute(HttpMethod.POST, "/api/events"),
             new PublicRoute(HttpMethod.GET, "/api/service-categories"),

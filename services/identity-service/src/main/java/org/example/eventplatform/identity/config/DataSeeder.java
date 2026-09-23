@@ -25,7 +25,7 @@ import java.util.List;
 @Slf4j
 public class DataSeeder implements ApplicationRunner {
 
-    private static final List<String> BASELINE_ROLES = List.of("SUPER_ADMIN", "ADMIN", "TN_MEMBER");
+    private static final List<String> BASELINE_ROLES = List.of("SUPER_ADMIN", "ADMIN", "TN_MEMBER", "CUSTOMER");
 
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;

@@ -12,5 +12,8 @@ public interface ShowPackageRepository extends JpaRepository<ShowPackage, Long> 
 
     List<ShowPackage> findByTenantId(Long tenantId);
 
+    /** Dùng cho sàn khách hàng — gói đang mở bán của mọi đoàn. */
+    List<ShowPackage> findByActiveTrue();
+
     Optional<ShowPackage> findByIdAndTenantId(Long id, Long tenantId);
 }

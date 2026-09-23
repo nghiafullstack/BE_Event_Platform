@@ -90,7 +90,25 @@ public class IdentityServiceClient {
         }
     }
 
+    /** Danh sách đoàn cho sàn khách hàng. Lỗi thì trả rỗng để trang khám phá không vỡ. */
+    public List<PublicTenant> findPublicTenants() {
+        try {
+            PublicTenant[] response = restClient.get()
+                    .uri("/api/internal/tenants/public")
+                    .retrieve()
+                    .body(PublicTenant[].class);
+            return response == null ? List.of() : Arrays.asList(response);
+        } catch (Exception ex) {
+            log.error("Could not fetch public tenants", ex);
+            return List.of();
+        }
+    }
+
     public record TenantSummary(Long id, String name, String domain, String email, boolean active) {
+    }
+
+    public record PublicTenant(Long id, String name, String domain, String logo, String category,
+                               String primaryColorHex, String accentColorHex) {
     }
 
     public record UserContact(Long userId, Long tenantId, String username, String fullName, String email,

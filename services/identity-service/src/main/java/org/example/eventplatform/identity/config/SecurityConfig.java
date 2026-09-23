@@ -40,6 +40,7 @@ public class SecurityConfig {
                                 "/api/auth/login",
                                 "/api/auth/refresh",
                                 "/api/auth/tenant-lookup",
+                                "/api/auth/customer/register",
                                 "/api/tenants/register",
                                 "/api/internal/**",
                                 "/error"

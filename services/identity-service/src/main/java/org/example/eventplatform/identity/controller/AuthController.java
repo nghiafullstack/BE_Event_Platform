@@ -3,6 +3,7 @@ package org.example.eventplatform.identity.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.eventplatform.identity.dto.auth.AuthTokenResponse;
+import org.example.eventplatform.identity.dto.auth.CustomerRegisterRequest;
 import org.example.eventplatform.identity.dto.auth.LoginRequest;
 import org.example.eventplatform.identity.dto.auth.RefreshTokenRequest;
 import org.example.eventplatform.identity.dto.auth.TenantLookupResponse;
@@ -23,6 +24,11 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthTokenResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @PostMapping("/customer/register")
+    public ResponseEntity<AuthTokenResponse> registerCustomer(@Valid @RequestBody CustomerRegisterRequest request) {
+        return ResponseEntity.ok(authService.registerCustomer(request));
     }
 
     @GetMapping("/tenant-lookup")

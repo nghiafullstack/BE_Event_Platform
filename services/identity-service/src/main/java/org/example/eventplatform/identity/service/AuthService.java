@@ -2,11 +2,15 @@ package org.example.eventplatform.identity.service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.eventplatform.identity.dto.auth.AuthTokenResponse;
+import org.example.eventplatform.identity.dto.auth.CustomerRegisterRequest;
 import org.example.eventplatform.identity.dto.auth.LoginRequest;
 import org.example.eventplatform.identity.dto.auth.TenantLookupResponse;
 import org.example.eventplatform.identity.dto.auth.UserSummaryResponse;
+import org.example.eventplatform.identity.entity.RegistrationStatus;
+import org.example.eventplatform.identity.entity.Role;
 import org.example.eventplatform.identity.entity.Tenant;
 import org.example.eventplatform.identity.entity.User;
+import org.example.eventplatform.identity.repository.RoleRepository;
 import org.example.eventplatform.identity.repository.TenantRepository;
 import org.example.eventplatform.identity.repository.UserRepository;
 import org.example.eventplatform.shared.security.JwtPrincipal;
@@ -22,8 +26,11 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class AuthService {
 
+    private static final String CUSTOMER_ROLE = "CUSTOMER";
+
     private final UserRepository userRepository;
     private final TenantRepository tenantRepository;
+    private final RoleRepository roleRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
 
@@ -72,6 +79,38 @@ public class AuthService {
             throw new RuntimeException("Có nhiều đoàn cùng dùng tài khoản này, vui lòng nhập mã đoàn để đăng nhập");
         }
         throw new RuntimeException("Tài khoản hoặc mật khẩu không chính xác");
+    }
+
+    /**
+     * Khách dùng số điện thoại làm username và không thuộc đoàn nào. Ràng buộc unique của bảng
+     * users là (tenant_id, username) — với tenant_id null thì MySQL coi các dòng là khác nhau,
+     * nên phải tự kiểm tra trùng ở đây thay vì trông chờ vào database.
+     */
+    @Transactional
+    public AuthTokenResponse registerCustomer(CustomerRegisterRequest request) {
+        String phone = request.getPhone().trim();
+        boolean phoneTaken = userRepository.findAllByUsername(phone).stream()
+                .anyMatch(u -> u.getTenant() == null);
+        if (phoneTaken) {
+            throw new RuntimeException("Số điện thoại này đã được đăng ký");
+        }
+
+        Role customerRole = roleRepository.findByName(CUSTOMER_ROLE)
+                .orElseThrow(() -> new RuntimeException("Chưa cấu hình vai trò khách hàng"));
+
+        User customer = User.builder()
+                .username(phone)
+                .phone(phone)
+                .email(request.getEmail())
+                .fullName(request.getFullName().trim())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .roles(customerRole)
+                .isActive(true)
+                .isVerified(true)
+                .statusConfirm(RegistrationStatus.ACTIVE)
+                .build();
+
+        return issueTokens(userRepository.save(customer));
     }
 
     @Transactional(readOnly = true)

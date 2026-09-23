@@ -3,6 +3,7 @@ package org.example.eventplatform.identity.controller;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.example.eventplatform.identity.dto.internal.AdminContactResponse;
+import org.example.eventplatform.identity.dto.internal.PublicTenantResponse;
 import org.example.eventplatform.identity.dto.internal.TenantSummaryResponse;
 import org.example.eventplatform.identity.dto.internal.UserContactResponse;
 import org.example.eventplatform.identity.entity.Tenant;
@@ -37,6 +38,28 @@ public class InternalController {
                 .map(this::toAdminContact)
                 .toList();
         return ResponseEntity.ok(admins);
+    }
+
+    /** Danh sách đoàn cho sàn khách hàng — chỉ đoàn đang hoạt động, chỉ trường công khai. */
+    @GetMapping("/tenants/public")
+    public ResponseEntity<List<PublicTenantResponse>> getPublicTenants() {
+        List<PublicTenantResponse> tenants = tenantRepository.findAll().stream()
+                .filter(Tenant::isActive)
+                .map(this::toPublicTenant)
+                .toList();
+        return ResponseEntity.ok(tenants);
+    }
+
+    private PublicTenantResponse toPublicTenant(Tenant tenant) {
+        return PublicTenantResponse.builder()
+                .id(tenant.getId())
+                .name(tenant.getName())
+                .domain(tenant.getDomain())
+                .logo(tenant.getLogo())
+                .category(tenant.getCategory())
+                .primaryColorHex(tenant.getPrimaryColorHex())
+                .accentColorHex(tenant.getAccentColorHex())
+                .build();
     }
 
     @GetMapping("/tenants/{tenantId}")
