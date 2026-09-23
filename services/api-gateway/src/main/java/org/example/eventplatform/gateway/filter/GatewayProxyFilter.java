@@ -18,6 +18,7 @@ import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -101,10 +102,12 @@ public class GatewayProxyFilter implements WebFilter, Ordered {
     private Mono<Void> proxy(ServerWebExchange exchange, RouteTable.Route route) {
         ServerHttpRequest request = exchange.getRequest();
         String query = request.getURI().getRawQuery();
-        String targetUrl = route.baseUri() + request.getPath().value() + (query != null ? "?" + query : "");
+        // Phải dựng URI sẵn thay vì đưa chuỗi cho WebClient: chuỗi bị coi là uri template
+        // và mã hoá lại lần nữa, làm hỏng query tiếng Việt (%C3%A0 -> %25C3%25A0).
+        URI targetUri = URI.create(route.baseUri() + request.getPath().value() + (query != null ? "?" + query : ""));
 
         return webClient.method(request.getMethod())
-                .uri(targetUrl)
+                .uri(targetUri)
                 .headers(headers -> {
                     headers.addAll(request.getHeaders());
                     headers.remove(HttpHeaders.HOST);
