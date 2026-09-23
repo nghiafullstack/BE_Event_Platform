@@ -7,6 +7,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 @Component
 @Slf4j
 public class CustomerServiceClient {
@@ -60,6 +65,48 @@ public class CustomerServiceClient {
         }
     }
 
-    public record CustomerSummary(Long id, Long tenantId, String fullName, String phone, String email) {
+    /** Find-or-create CRM row for marketplace booking; always throws on remote failure. */
+    public CustomerSummary findOrCreate(Long tenantId, String phone, Long userId, String fullName, String email) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("tenant_id", tenantId);
+        body.put("phone", phone);
+        body.put("user_id", userId);
+        body.put("full_name", fullName);
+        body.put("email", email);
+        try {
+            CustomerSummary created = restClient.post()
+                    .uri("/api/internal/customers/find-or-create")
+                    .body(body)
+                    .retrieve()
+                    .body(CustomerSummary.class);
+            if (created == null || created.id() == null) {
+                throw new IllegalStateException("customer-service không trả về khách hàng");
+            }
+            return created;
+        } catch (RestClientResponseException ex) {
+            throw new IllegalStateException("Không tạo được hồ sơ khách trên customer-service", ex);
+        }
+    }
+
+    public List<CustomerSummary> findByUserId(Long userId) {
+        if (userId == null) {
+            return List.of();
+        }
+        try {
+            CustomerSummary[] response = restClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/api/internal/customers")
+                            .queryParam("userId", userId)
+                            .build())
+                    .retrieve()
+                    .body(CustomerSummary[].class);
+            return response == null ? List.of() : Arrays.asList(response);
+        } catch (Exception ex) {
+            log.error("Could not list customers for user {}", userId, ex);
+            return List.of();
+        }
+    }
+
+    public record CustomerSummary(Long id, Long tenantId, String fullName, String phone, String email, Long userId) {
     }
 }

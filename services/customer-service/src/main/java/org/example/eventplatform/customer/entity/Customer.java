@@ -45,6 +45,14 @@ public class Customer extends BaseEntity {
     @Column(name = "assigned_to_user_id")
     private Long assignedToUserId;
 
+    /**
+     * Links this per-tenant CRM row to the marketplace CUSTOMER account
+     * (identity-service User with role CUSTOMER, tenantId = null).
+     * Nullable because admin-created CRM customers may have no app account.
+     */
+    @Column(name = "user_id")
+    private Long userId;
+
     @Column(name = "tenant_id", nullable = false)
     private Long tenantId;
 }

@@ -17,4 +17,5 @@ public class CustomerSummaryResponse {
     private String fullName;
     private String phone;
     private String email;
+    private Long userId;
 }

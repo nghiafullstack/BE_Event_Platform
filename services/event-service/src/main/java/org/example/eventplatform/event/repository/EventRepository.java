@@ -17,4 +17,6 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     List<Event> findByTenantIdAndEventDateBetween(Long tenantId, LocalDate start, LocalDate end);
 
     Page<Event> findByTenantIdAndEventDateBetween(Long tenantId, LocalDate start, LocalDate end, Pageable pageable);
+
+    List<Event> findByCustomerIdInOrderByCreatedAtDesc(List<Long> customerIds);
 }

@@ -4,12 +4,17 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.example.eventplatform.customer.dto.CustomerRequest;
 import org.example.eventplatform.customer.dto.CustomerResponse;
+import org.example.eventplatform.customer.dto.internal.CustomerSummaryResponse;
+import org.example.eventplatform.customer.dto.internal.FindOrCreateCustomerRequest;
 import org.example.eventplatform.customer.entity.Customer;
+import org.example.eventplatform.customer.entity.CustomerType;
 import org.example.eventplatform.customer.repository.CustomerRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -72,6 +77,55 @@ public class CustomerService {
     public void deleteCustomer(Long id, Long tenantId) {
         Customer customer = getOrThrow(id, tenantId);
         customerRepository.delete(customer);
+    }
+
+    /**
+     * Marketplace booking path: reuse the CRM row for (tenant, phone) if it
+     * already exists, otherwise create a new INDIVIDUAL customer and link it
+     * to the CUSTOMER app account via {@code userId}.
+     */
+    @Transactional
+    public CustomerSummaryResponse findOrCreate(FindOrCreateCustomerRequest request) {
+        String phone = request.getPhone().trim();
+        return customerRepository.findByPhoneAndTenantId(phone, request.getTenantId())
+                .map(existing -> {
+                    if (existing.getUserId() == null && request.getUserId() != null) {
+                        existing.setUserId(request.getUserId());
+                        return toSummary(customerRepository.save(existing));
+                    }
+                    return toSummary(existing);
+                })
+                .orElseGet(() -> {
+                    String name = request.getFullName() != null && !request.getFullName().isBlank()
+                            ? request.getFullName().trim()
+                            : phone;
+                    Customer created = Customer.builder()
+                            .fullName(name)
+                            .phone(phone)
+                            .email(request.getEmail())
+                            .type(CustomerType.INDIVIDUAL)
+                            .userId(request.getUserId())
+                            .tenantId(request.getTenantId())
+                            .active(true)
+                            .build();
+                    return toSummary(customerRepository.save(created));
+                });
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerSummaryResponse> findByUserId(Long userId) {
+        return customerRepository.findByUserId(userId).stream().map(this::toSummary).toList();
+    }
+
+    private CustomerSummaryResponse toSummary(Customer customer) {
+        return CustomerSummaryResponse.builder()
+                .id(customer.getId())
+                .tenantId(customer.getTenantId())
+                .fullName(customer.getFullName())
+                .phone(customer.getPhone())
+                .email(customer.getEmail())
+                .userId(customer.getUserId())
+                .build();
     }
 
     private Customer getOrThrow(Long id, Long tenantId) {

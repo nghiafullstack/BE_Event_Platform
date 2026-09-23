@@ -147,6 +147,78 @@ public class EventService {
         return toResponse(saved);
     }
 
+    /**
+     * Khách thuê đặt show từ sàn: tìm/tạo CRM theo SĐT, tạo Event PENDING_APPROVAL,
+     * rồi đẩy thông báo BOOKING_REQUESTED tới admin đoàn.
+     */
+    @Transactional
+    public EventResponse createCustomerBooking(CustomerBookingRequest request, JwtPrincipal principal) {
+        if (principal == null || principal.userId() == null) {
+            throw new AccessDeniedException("Cần đăng nhập tài khoản khách để đặt show");
+        }
+
+        IdentityServiceClient.UserContact customerUser = identityServiceClient.findUser(principal.userId());
+        String phone = customerUser != null && customerUser.username() != null
+                ? customerUser.username()
+                : principal.username();
+        String fullName = customerUser != null && customerUser.fullName() != null && !customerUser.fullName().isBlank()
+                ? customerUser.fullName()
+                : phone;
+        String email = customerUser != null ? customerUser.email() : null;
+
+        CustomerServiceClient.CustomerSummary customer = customerServiceClient.findOrCreate(
+                request.getTenantId(), phone, principal.userId(), fullName, email);
+
+        ShowPackage selectedPackage = showPackageRepository
+                .findByIdAndTenantId(request.getPackageId(), request.getTenantId())
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy gói show với ID: " + request.getPackageId()));
+
+        String eventName = "Đặt show · " + selectedPackage.getName();
+        Event event = Event.builder()
+                .name(eventName)
+                .eventDate(request.getEventDate())
+                .startTime(request.getStartTime())
+                .location(request.getLocation())
+                .customerId(customer.id())
+                .tenantId(request.getTenantId())
+                .packageId(selectedPackage.getId())
+                .packageName(selectedPackage.getName())
+                .totalAmount(selectedPackage.getPrice())
+                .platformFee(calculateDefaultFee(selectedPackage.getPrice()))
+                .description(request.getNote())
+                .venueLat(request.getLat())
+                .venueLng(request.getLng())
+                .status(EventStatus.PENDING_APPROVAL)
+                .createdByUserId(principal.userId())
+                .build();
+        event.setCreatedBy(principal.username());
+
+        Event saved = eventRepository.save(event);
+
+        notificationPublisher.publish(
+                "BOOKING_REQUESTED",
+                null,
+                saved.getTenantId(),
+                "Có yêu cầu đặt show mới",
+                "Khách " + fullName + " vừa gửi đơn đặt \"" + selectedPackage.getName() + "\" — vào duyệt để xác nhận",
+                Map.of("eventId", String.valueOf(saved.getId()))
+        );
+
+        return toResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public List<EventResponse> listCustomerBookings(Long userId) {
+        List<CustomerServiceClient.CustomerSummary> customers = customerServiceClient.findByUserId(userId);
+        if (customers.isEmpty()) {
+            return List.of();
+        }
+        List<Long> customerIds = customers.stream().map(CustomerServiceClient.CustomerSummary::id).toList();
+        return eventRepository.findByCustomerIdInOrderByCreatedAtDesc(customerIds).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     private BigDecimal calculateDefaultFee(BigDecimal totalAmount) {
         return totalAmount != null ? totalAmount.multiply(new BigDecimal("0.1")) : BigDecimal.ZERO;
     }
@@ -597,6 +669,7 @@ public class EventService {
                 .depositAmount(event.getDepositAmount())
                 .depositPercent(computeDepositPercent(event.getDepositAmount(), event.getTotalAmount()))
                 .vehicleInfo(event.getVehicleInfo())
+                .description(event.getDescription())
                 .venueLat(event.getVenueLat())
                 .venueLng(event.getVenueLng())
                 .checkinRadiusMeters(event.getCheckinRadiusMeters())

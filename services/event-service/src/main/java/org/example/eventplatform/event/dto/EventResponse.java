@@ -44,6 +44,7 @@ public class EventResponse {
     private BigDecimal depositAmount;
     private BigDecimal depositPercent;
     private String vehicleInfo;
+    private String description;
     private Double venueLat;
     private Double venueLng;
     private Integer checkinRadiusMeters;

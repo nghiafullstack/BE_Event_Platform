@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -26,4 +27,6 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     Optional<Customer> findByIdAndTenantId(Long id, Long tenantId);
 
     Optional<Customer> findByPhoneAndTenantId(String phone, Long tenantId);
+
+    List<Customer> findByUserId(Long userId);
 }
